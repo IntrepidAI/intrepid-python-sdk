@@ -78,8 +78,9 @@ class Intrepid:
 
     class __Intrepid:
 
-        def __init__(self):
-            self.current_visitor = None
+        def __init__(self, node_id):
+            self.node_id = node_id
+            # self.current_visitor = None
             self.status = Status.NOT_INITIALIZED
             self.configuration_manager = ConfigManager()
             self.device_context = {}
@@ -108,11 +109,22 @@ class Intrepid:
                 if intrepid_config.status_listener is not None:
                     intrepid_config.status_listener.on_status_changed(new_status)
 
-        def stop(self):
-            self.current_visitor = None
+        def close(self):
             self.status = Status.NOT_INITIALIZED
             # log(TAG_TERMINATION, LogLevel.INFO, INFO_STOPPED)
             self.configuration_manager.reset()
+
+        # TODO
+        def create_qos(self):
+            pass
+
+        # TODO
+        def info(self):
+            pass
+
+        # TODO
+        def specs(self):
+            pass
 
         def __log(self, tag, level, message):
             try:

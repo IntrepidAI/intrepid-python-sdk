@@ -11,20 +11,17 @@ from intrepid import *
 
 def init():
     print(sys.version)
-    Intrepid.start('__env_id__', '__api_key__', DecisionApi(timeout=3000,
-                                                            cache_manager=SqliteCacheManager(),
-                                                            log_level=LogLevel.ALL,
-                                                            tracking_manager_config=TrackingManagerConfig(
-                                                                time_interval=10000,
-                                                                max_pool_size=5)))  ## Demo
 
-    visitor = Intrepid.new_visitor('visitor-A', context={'testing_tracking_manager': True})
-    visitor.fetch_flags()
-    visitor.get_flag("my_flag", 'default').value()
-    visitor.send_hit(Screen("screen 1"))
+    handle = Intrepid("custom/node/4224")
+    node_info = handle.info()
+    node_status = handle.status()
+
+    print(node_info)
+    print(node_status)
+
+    handle.close()
+
     time.sleep(2)
-
-
 
 
 init()
