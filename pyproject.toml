@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "Intrepid"
+version = "0.0.1"
+description = "Intrepid Python SDK"
+authors = ["frag <francesco@intrepid.ai>"]
+license = "Apache License Version 2.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.7"
+requests = ">=2.31.0"
+websockets = ">= 11.0"
+pytest = ">=7.4.3"
+responses = "=0.23.0"
+mock = ">=5.1.0"
+importlib-metadata = ">=6.0.0"
+urllib3 = "=1.26.18"
+zipp = ">=3.12.0"
+tomli-w = "^1.0.0"
+pytest-cov = "^4.1.0"
+
+[tool.poetry.urls]
+Sources = "https://github.com/IntrepidAI/intrepid-python-sdk"
+Documentation = "https://docs.developers.intrepid.ai/docs/python"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = ["flagship", "tests"]
