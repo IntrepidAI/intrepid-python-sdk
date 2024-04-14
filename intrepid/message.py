@@ -14,15 +14,16 @@ class Opcode(Enum):
 
 
 class IntrepidMessage:
-    def __init__(self, opcode: Opcode, payload, timestamp: datetime, node_id: str, priority=int(0), qos=None):
+    def __init__(self, opcode: Opcode, payload, timestamp: datetime, recipient: str, priority=int(0)):
         self.opcode = opcode
         self.payload = payload
         self.timestamp = timestamp
-        self.node_id = node_id
+        self.recipient = recipient
         self.priority = priority
-        self.qos = qos
 
     def serialize(self, cdr=True) -> bytes:
         # TODO
         return bytes()
 
+    def __str__(self):
+        return f"IntrepidMessage(op={self.opcode}, payload={self.payload}, timestamp={self.timestamp}, recipient={self.recipient}, priority={self.priority})"

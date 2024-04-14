@@ -11,7 +11,9 @@ from intrepid.log_manager import LogLevel
 from intrepid.status import Status
 from intrepid.utils import log
 from intrepid.node import Node, DataType, DataElement
-from intrepid.qos import QoS
+from intrepid.qos import Qos
+from intrepid.message import IntrepidMessage, Opcode
+from datetime import datetime
 
 __name__ = 'intrepid'
 __version__ = importlib_metadata.distribution(__name__).version
@@ -19,9 +21,9 @@ __version__ = importlib_metadata.distribution(__name__).version
 
 
 class Intrepid:
-    # __instance = None
+    __instance = None
 
-    def __init__(self, node_id, qos=None):
+    def __init__(self, node_id):
         """
         Initialize the Intrepid SDK.
 
@@ -29,9 +31,9 @@ class Intrepid:
         @param qos: Dictionary that specifies the QoS applied to this node (Not Implemented)
         @return:
         """
-        self.__instance = None
+        # self.__instance = None
         self.node_id = str(node_id)
-        self.qos = qos
+        self.qos = None
 
     @staticmethod
     def config():
@@ -41,31 +43,40 @@ class Intrepid:
         """
         return Intrepid.__get_instance().configuration_manager.intrepid_config
 
+
     @staticmethod
-    def info() -> Node:
+    def create_qos(qos: Qos):
         """
         Return the details of this node
         @return: Status.
         """
-        return Intrepid.__get_instance().info
+        return Intrepid.__get_instance().create_qos(qos)
+
+
+    # @staticmethod
+    def info(self) -> Node:
+        """
+        Return the details of this node
+        @return: Status.
+        """
+        return Intrepid.__get_instance().info(self.node_id)
 
 
     @staticmethod
-    def status() -> Status:
+    def status():
         """
         Return the current SDK status.
         @return: Status.
         """
         return Intrepid.__get_instance().status
 
-    @staticmethod
-    @param_types_validator(True, str, str, [_IntrepidConfig, None])
-    def write(target, data):
+    # @staticmethod
+    def write(self, target, data):
         """
         Write data to node output target.
         @return
         """
-        return Intrepid.__get_instance().write
+        return Intrepid.__get_instance().write(self.node_id, target, data)
 
     @staticmethod
     def stop():
@@ -92,14 +103,13 @@ class Intrepid:
 
     class __Intrepid:
 
-        def __init__(self, node_id):
-            self.node_id = node_id
-            # self.current_visitor = None
+        def __init__(self):
+            self.qos = None
             self.status = Status.NOT_INITIALIZED
             self.configuration_manager = ConfigManager()
             self.device_context = {}
 
-        @param_types_validator(True, str, str, [_IntrepidConfig, None])
+        # @param_types_validator(True, str, str, [_IntrepidConfig, None])
         def start(self, env_id, api_key, intrepid_config):
             # self.update_status(intrepid_config, Status.STARTING)
             if not env_id or not api_key:
@@ -128,20 +138,35 @@ class Intrepid:
             # log(TAG_TERMINATION, LogLevel.INFO, INFO_STOPPED)
             self.configuration_manager.reset()
 
-        # TODO
-        def create_qos(self):
-            pass
+        def create_qos(self, qos: Qos):
+            # TODO make request and set local if success
+            self.qos = qos
 
-        def status(self) -> Status:
-            return Status.NOT_INITIALIZED
+        def stop(self):
+            # Create STOP message
+            msg = IntrepidMessage(Opcode.STOP, None, datetime.now(), self.node_id).serialize()
 
-        # TODO
-        def info(self) -> Node:
+            # TODO send msg over websocket
+            self.status = Status.NOT_INITIALIZED
+
+        def info(self, node_id: str) -> Node:
+            recipient = node_id
+            msg = IntrepidMessage(Opcode.INFO, payload=None, timestamp=datetime.now(), recipient=recipient, priority=0)
+            print(msg)
+            # TODO send msg over websocket
+
             node = Node()
             node.add_input("in1", DataType.INTEGER)
             node.add_input("in2", DataType.INTEGER)
             node.add_output("out1", DataType.FLOAT)
             return node
+
+        def write(self, node_id, target, data):
+            recipient = node_id + '/' + target
+            msg = IntrepidMessage(Opcode.WRITE, payload=data, timestamp=datetime.now(), recipient=recipient, priority=0)
+            print(msg)
+            # TODO send msg over websocket
+
 
         def __log(self, tag, level, message):
             try:

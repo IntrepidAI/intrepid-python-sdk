@@ -1,4 +1,4 @@
-class QoS:
+class Qos:
     def __init__(self, reliability=None, durability=None, history=None, deadline=None, lifespan=None):
         self.reliability = reliability  # Reliability QoS
         self.durability = durability    # Durability QoS
@@ -24,13 +24,3 @@ class QoS:
     def __str__(self):
         return f"QoS(reliability={self.reliability}, durability={self.durability}, " \
                f"history={self.history}, deadline={self.deadline}, lifespan={self.lifespan})"
-
-
-
-if __name__ == "__main__":
-    # Example usage
-    qos = QoS(reliability="BestEffort", durability="TransientLocal")
-    qos.set_history("KeepLast")
-    qos.set_deadline(100)  # Deadline expressed in milliseconds
-
-    print(qos)  # Print the QoS object
