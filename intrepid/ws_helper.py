@@ -10,7 +10,7 @@ from intrepid.constants import TAG_HTTP_REQUEST, DEBUG_REQUEST, URL_TRACKING, UR
 from intrepid.decorators import param_types_validator
 from intrepid.log_manager import LogLevel
 from intrepid.utils import pretty_dict, log, log_exception
-
+from intrepid.message import IntrepidMessage
 
 
 class WebSocketHelper:

@@ -1,4 +1,5 @@
 import struct
+from datetime import datetime
 from enum import Enum
 
 class Opcode(Enum):
@@ -13,7 +14,7 @@ class Opcode(Enum):
 
 
 class IntrepidMessage:
-    def __init__(self, opcode, payload, timestamp, node_id, priority=0, qos=None):
+    def __init__(self, opcode: Opcode, payload, timestamp: datetime, node_id: str, priority=int(0), qos=None):
         self.opcode = opcode
         self.payload = payload
         self.timestamp = timestamp
@@ -23,5 +24,5 @@ class IntrepidMessage:
 
     def serialize(self, cdr=True) -> bytes:
         # TODO
-        return
+        return bytes()
 

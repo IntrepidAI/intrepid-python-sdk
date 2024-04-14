@@ -41,12 +41,12 @@ node_status = node_0.status()
 
 ...
 
-node_0.write(to="output_1", data=result_f)
+node_0.write(target="output_1", data=result_f)
 
 
 # Read from Graph
 node_1 = Intrepid(node_id="8268a31d-40cc-4b85-bf06-d425d72f743e")
-my_var = node_1.read("res")
+my_var = node_1.read(source="res")
 ...
 
 result_f, result_s = foo(my_var, var_b)

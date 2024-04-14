@@ -11,7 +11,7 @@ from intrepid.status import Status
 class ConfigManager:
 
     def __init__(self):
-        self.flagship_config = None
+        self.intrepid_config = None
         self.decision_manager = None
         self.tracking_manager = None
         self.cache_manager = None

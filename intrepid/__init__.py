@@ -10,7 +10,8 @@ from intrepid.errors import InitializationParamError
 from intrepid.log_manager import LogLevel
 from intrepid.status import Status
 from intrepid.utils import log
-
+from intrepid.node import Node, DataType, DataElement
+from intrepid.qos import QoS
 
 __name__ = 'intrepid'
 __version__ = importlib_metadata.distribution(__name__).version
@@ -20,21 +21,17 @@ __version__ = importlib_metadata.distribution(__name__).version
 class Intrepid:
     # __instance = None
 
-    def __init__(self):
-        pass
-
-    @staticmethod
-    @param_types_validator(False, str, str, [_IntrepidConfig, None])
-    def start(env_id, api_key, configuration=None):
+    def __init__(self, node_id, qos=None):
         """
-        Start the Intrepid SDK.
+        Initialize the Intrepid SDK.
 
-        @param env_id: Environment id provided by Intrepid.
-        @param api_key: Secure api key provided by Intrepid.
-        @param configuration: Intrepid configuration to initialize with. Can be DecisionApi or Bucketing.
+        @param node_id: Unique identifier of the node managed by this handler
+        @param qos: Dictionary that specifies the QoS applied to this node (Not Implemented)
         @return:
         """
-        Intrepid.__get_instance().start(env_id, api_key, configuration)
+        self.__instance = None
+        self.node_id = str(node_id)
+        self.qos = qos
 
     @staticmethod
     def config():
@@ -44,14 +41,31 @@ class Intrepid:
         """
         return Intrepid.__get_instance().configuration_manager.intrepid_config
 
+    @staticmethod
+    def info() -> Node:
+        """
+        Return the details of this node
+        @return: Status.
+        """
+        return Intrepid.__get_instance().info
+
 
     @staticmethod
-    def status():
+    def status() -> Status:
         """
         Return the current SDK status.
         @return: Status.
         """
         return Intrepid.__get_instance().status
+
+    @staticmethod
+    @param_types_validator(True, str, str, [_IntrepidConfig, None])
+    def write(target, data):
+        """
+        Write data to node output target.
+        @return
+        """
+        return Intrepid.__get_instance().write
 
     @staticmethod
     def stop():
@@ -118,13 +132,16 @@ class Intrepid:
         def create_qos(self):
             pass
 
-        # TODO
-        def info(self):
-            pass
+        def status(self) -> Status:
+            return Status.NOT_INITIALIZED
 
         # TODO
-        def specs(self):
-            pass
+        def info(self) -> Node:
+            node = Node()
+            node.add_input("in1", DataType.INTEGER)
+            node.add_input("in2", DataType.INTEGER)
+            node.add_output("out1", DataType.FLOAT)
+            return node
 
         def __log(self, tag, level, message):
             try:
