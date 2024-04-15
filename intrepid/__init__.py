@@ -28,6 +28,7 @@ __version__ = importlib_metadata.distribution(__name__).version
 async def handler(websocket):
     async for message in websocket:
         # TODO inspect message and execute action
+
         await websocket.send(message)
 
 # TODO now it just echoes
@@ -56,7 +57,7 @@ class Intrepid:
         @param qos: Dictionary that specifies the QoS applied to this node (Not Implemented)
         @return:
         """
-        # self.__instance = None
+
         self.node_id = str(node_id)
         self.qos = None
         self.__unix_socket_path = None
@@ -70,8 +71,6 @@ class Intrepid:
 
         asyncio.run(wsserver(unix_socket_path))
 
-
-
     @staticmethod
     def config():
         """
@@ -82,6 +81,11 @@ class Intrepid:
 
 
     @staticmethod
+    def register_callback(func, node_info: Node):
+        return Intrepid.__get_instance().__register_callback(func, node_info)
+
+
+    @staticmethod
     def create_qos(qos: Qos):
         """
         Return the details of this node
@@ -89,15 +93,26 @@ class Intrepid:
         """
         return Intrepid.__get_instance().create_qos(qos)
 
-
     # @staticmethod
-    def info(self) -> Node:
+    def __node_specs(self, specs: Node):
         """
         Return the details of this node
         @return: Status.
         """
-        return Intrepid.__get_instance().info(self.node_id)
 
+        # TODO this should be received from websocket client
+        # TODO validate specs
+        node = Node()
+        node.add_input("in1", DataType.INTEGER)
+        node.add_input("in2", DataType.INTEGER)
+        node.add_output("out1", DataType.FLOAT)
+
+
+        return Intrepid.__get_instance().__node_specs(node)
+
+    # @staticmethod
+    def info(self) -> Node:
+        return Intrepid.__get_instance().node_specs
 
     @staticmethod
     def status():
@@ -142,9 +157,19 @@ class Intrepid:
 
         def __init__(self):
             self.qos = None
+
+            # Node input/output types and names
+            self.node_specs = None
+
             self.status = Status.NOT_INITIALIZED
             self.configuration_manager = ConfigManager()
             self.device_context = {}
+
+        def __node_specs(self, specs):
+            self.node_specs = specs
+
+        def __register_callback(self, func, node_info):
+            self.callback = func
 
         # @param_types_validator(True, str, str, [_IntrepidConfig, None])
         def start(self, env_id, api_key, intrepid_config):
@@ -186,17 +211,8 @@ class Intrepid:
             # TODO send msg over websocket
             self.status = Status.NOT_INITIALIZED
 
-        def info(self, node_id: str) -> Node:
-            recipient = node_id
-            msg = IntrepidMessage(Opcode.INFO, payload=None, timestamp=datetime.now(), recipient=recipient, priority=0)
-            print(msg)
-            # TODO send msg over websocket
-
-            node = Node()
-            node.add_input("in1", DataType.INTEGER)
-            node.add_input("in2", DataType.INTEGER)
-            node.add_output("out1", DataType.FLOAT)
-            return node
+        def info(self):
+            self.node_specs
 
         def write(self, node_id, target, data):
             recipient = node_id + '/' + target
