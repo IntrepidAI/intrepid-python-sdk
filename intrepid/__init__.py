@@ -27,6 +27,7 @@ __version__ = importlib_metadata.distribution(__name__).version
 
 async def handler(websocket):
     async for message in websocket:
+        # TODO inspect message and execute action
         await websocket.send(message)
 
 # TODO now it just echoes
