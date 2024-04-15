@@ -1,7 +1,11 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import asyncio
 import importlib_metadata
+import os
+import subprocess
+from websockets.server import serve, unix_serve
 from intrepid.config import _IntrepidConfig
 from intrepid.config_manager import ConfigManager
 from intrepid.constants import TAG_STATUS, INFO_STATUS_CHANGED, TAG_INITIALIZATION, INFO_READY, ERROR_CONFIGURATION, INFO_STOPPED
@@ -20,6 +24,26 @@ __version__ = importlib_metadata.distribution(__name__).version
 
 
 
+
+async def handler(websocket):
+    async for message in websocket:
+        await websocket.send(message)
+
+# TODO now it just echoes
+async def wsserver(unix_socket_path: str):
+    # Remove the socket file if it already exists
+    if os.path.exists(unix_socket_path):
+        os.remove(unix_socket_path)
+
+    port = 9999
+    print("Listening on port ", port)
+    command = f"socat TCP-LISTEN:{port} UNIX-CONNECT:{unix_socket_path}"
+    subprocess.Popen(command, shell=True)
+
+    async with unix_serve(handler, unix_socket_path):
+        await asyncio.Future()  # run forever
+
+
 class Intrepid:
     __instance = None
 
@@ -34,6 +58,18 @@ class Intrepid:
         # self.__instance = None
         self.node_id = str(node_id)
         self.qos = None
+        self.__unix_socket_path = None
+
+    def start(self):
+        # Define the Unix domain socket path
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        unix_socket_path = f"/tmp/intrepid-ws-{timestamp}.sock"
+        print("Intrepid SDK started at ", unix_socket_path)
+        self.__unix_socket_path = unix_socket_path
+
+        asyncio.run(wsserver(unix_socket_path))
+
+
 
     @staticmethod
     def config():

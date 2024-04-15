@@ -11,6 +11,9 @@ and install with
 `poetry install`
 
 
+python3 -m websockets ws://localhost:9999/
+
+
 
 # Example for showcasing Python bindings
 
@@ -43,6 +46,11 @@ node_specs = node_0.info()
 node_status = node_0.status()
 
 ...
+
+
+# When inputs of node are received execute custom function
+node_0.on_input_update(foo, **args)
+
 
 # Write to node output
 node_0.write(target="output_1", data=result_f)
