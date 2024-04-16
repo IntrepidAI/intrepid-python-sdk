@@ -1,9 +1,17 @@
 from __future__ import absolute_import
 
 import json
+import signal
+import sys
 
 import intrepid
 from intrepid.constants import WARNING_CONFIGURATION_PARAM_TYPE, WARNING_CONFIGURATION_PARAM_MIN_MAX
+
+def signal_handler(sig, frame):
+    print("Ctrl+C detected. Goodbye...")
+    sys.exit(0)
+
+
 
 
 def log(tag, level, message, start_config=None):

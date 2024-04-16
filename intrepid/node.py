@@ -44,6 +44,6 @@ if __name__ == '__main__':
     n0 = Node()
     n0.add_input("in1", DataType.INTEGER)
     n0.add_input("in2", DataType.INTEGER)
-    n0.add_input("in3", DataType.INTEGER)
+    # n0.add_input("in3", DataType.INTEGER)
     n0.add_output("out1", DataType.FLOAT)
     n0.get_inputs()

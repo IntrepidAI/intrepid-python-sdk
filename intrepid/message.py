@@ -11,6 +11,7 @@ class Opcode(Enum):
     STOP = 6
     PING = 9
     PONG = 10
+    EXEC = 11
 
 
 class IntrepidMessage:
