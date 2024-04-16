@@ -98,7 +98,7 @@ class Intrepid:
         log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_SDK_READY.format(unix_socket_path))
 
         self.__unix_socket_path = unix_socket_path
-        asyncio.run(wsserver(unix_socket_path))
+        asyncio.run(wsserver(self.__unix_socket_path))
 
     @staticmethod
     def config():
