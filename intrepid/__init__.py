@@ -4,7 +4,7 @@ import logging
 from typing import Callable, Dict, List, Optional
 import asyncio
 import importlib_metadata
-import os
+import os, sys
 import subprocess
 from websockets.server import serve, unix_serve
 from intrepid.config import _IntrepidConfig
@@ -88,6 +88,9 @@ class Intrepid:
         self.__callback = None
 
     def start(self):
+        if self.__callback is None:
+            log(TAG_HTTP_REQUEST, LogLevel.ERROR, ERROR_REGISTER_CALLBACK)
+            sys.exit(1)
         # Define the Unix domain socket path
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         unix_socket_path = f"/tmp/intrepid-ws-{timestamp}.sock"
