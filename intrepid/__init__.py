@@ -24,6 +24,11 @@ from intrepid.qos import Qos
 from intrepid.message import IntrepidMessage, Opcode
 from datetime import datetime
 
+
+import aiohttp
+from aiohttp import web, WSCloseCode
+import asyncio
+
 __name__ = 'intrepid'
 __version__ = importlib_metadata.distribution(__name__).version
 
@@ -46,27 +51,59 @@ signal.signal(signal.SIGINT, signal_handler)
 # logger = logging.getLogger(__name__)  # Create a logger instance
 
 
+async def http_handler(request):
+    # TODO serve http request
+    return web.Response(text='Hello, world')
 
-async def handler(websocket):
-    async for message in websocket:
-        # TODO inspect message and execute action
+async def websocket_handler(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
 
-        await websocket.send(message)
+    async for msg in ws:
+        if msg.type == aiohttp.WSMsgType.TEXT:
+            if msg.data == 'close':
+                await ws.close()
+            else:
+                await ws.send_str('some websocket message payload')
+        elif msg.type == aiohttp.WSMsgType.ERROR:
+            print('ws connection closed with exception %s' % ws.exception())
+
+    return ws
+
+def create_runner():
+    app = web.Application()
+    app.add_routes([
+        web.get('/',   http_handler),
+        web.get('/ws', websocket_handler),
+    ])
+    return web.AppRunner(app)
+
+async def start_server(host="127.0.0.1", port=9999):
+    runner = create_runner()
+    await runner.setup()
+    site = web.TCPSite(runner, host, port)
+    await site.start()
+
+# async def handler(websocket):
+#     async for message in websocket:
+#         # TODO inspect message and execute action
+
+#         await websocket.send(message)
 
 # TODO now it just echoes
-async def wsserver(unix_socket_path: str):
-    # Remove the socket file if it already exists
-    if os.path.exists(unix_socket_path):
-        os.remove(unix_socket_path)
+# async def wsserver(unix_socket_path: str):
+#     # Remove the socket file if it already exists
+#     if os.path.exists(unix_socket_path):
+#         os.remove(unix_socket_path)
 
-    port = 9999
-    # logger.info("Listening on port {}".format(port))
-    log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_WSSERVER_READY.format(port))
-    command = f"socat TCP-LISTEN:{port} UNIX-CONNECT:{unix_socket_path}"
-    subprocess.Popen(command, shell=True)
+#     port = 9999
+#     # logger.info("Listening on port {}".format(port))
+#     log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_WSSERVER_READY.format(port))
+#     command = f"socat TCP-LISTEN:{port} UNIX-CONNECT:{unix_socket_path}"
+#     subprocess.Popen(command, shell=True)
 
-    async with unix_serve(handler, unix_socket_path):
-        await asyncio.Future()  # run forever
+#     async with unix_serve(handler, unix_socket_path):
+#         await asyncio.Future()  # run forever
 
 
 class Intrepid:
@@ -91,14 +128,18 @@ class Intrepid:
         if self.__callback is None:
             log(TAG_HTTP_REQUEST, LogLevel.ERROR, ERROR_REGISTER_CALLBACK)
             sys.exit(1)
-        # Define the Unix domain socket path
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        unix_socket_path = f"/tmp/intrepid-ws-{timestamp}.sock"
-        # logger.info("Intrepid SDK started at {}".format(unix_socket_path))
-        log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_SDK_READY.format(unix_socket_path))
+        # # Define the Unix domain socket path
+        # timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        # unix_socket_path = f"/tmp/intrepid-ws-{timestamp}.sock"
+        # # logger.info("Intrepid SDK started at {}".format(unix_socket_path))
+        # log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_SDK_READY.format(unix_socket_path))
 
-        self.__unix_socket_path = unix_socket_path
-        asyncio.run(wsserver(self.__unix_socket_path))
+        # self.__unix_socket_path = unix_socket_path
+        # asyncio.run(wsserver(self.__unix_socket_path))
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(start_server())
+        loop.run_forever()
 
     @staticmethod
     def config():

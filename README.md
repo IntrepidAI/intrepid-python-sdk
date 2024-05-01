@@ -11,7 +11,7 @@ and install with
 `poetry install`
 
 
-python3 -m websockets ws://localhost:9999/
+`python3 -m websockets ws://localhost:9999/`
 
 
 
@@ -60,6 +60,8 @@ node_status = node_0.status()
 # Register callback with node input. Callback and node inputs must have the same signature (same number/name/type)
 node_0.register_callback(my_callback_function)
 ...
+
+node_0.register()
 
 node_0.start()
 

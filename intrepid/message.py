@@ -28,3 +28,15 @@ class IntrepidMessage:
 
     def __str__(self):
         return f"IntrepidMessage(op={self.opcode}, payload={self.payload}, timestamp={self.timestamp}, recipient={self.recipient}, priority={self.priority})"
+
+class Container(Enum):
+    SINGLE = 0,
+    OPTION = 1,
+    ARRAY = 2,
+    ANY = 3
+
+class Count(Enum):
+    ONE = 1,
+    ZERO_OR_MORE = 2
+
+

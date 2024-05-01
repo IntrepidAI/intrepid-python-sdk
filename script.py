@@ -3,10 +3,10 @@ import sys
 import time
 import signal
 import sys
-
+import json
 
 # from intrepid import *
-from intrepid import Intrepid, Qos
+from intrepid import Intrepid, Qos, Node, DataType
 # from intrepid.cache_manager import SqliteCacheManager
 # from intrepid.config import DecisionApi, Bucketing
 # from intrepid.hits import Screen
@@ -37,6 +37,19 @@ def init():
     qos.set_history("KeepLast")
     qos.set_deadline(100)  # Deadline expressed in milliseconds
 
+    # Configure my node
+    mynode = Node("my_type")
+    mynode.add_input("in1", DataType.INTEGER)
+    mynode.add_input("in2", DataType.FLOAT)
+    mynode.add_input("in3", DataType.STRING)
+    mynode.add_input("in4", DataType.FLOW)
+    mynode.add_input("in5", DataType.ANY)
+
+    mynode.add_output("out1", DataType.FLOAT)
+    mynode.get_inputs()
+    mynode_json = mynode.to_json()
+    print(mynode_json)
+
     # Write to Graph
     node_0 = Intrepid(node_id="node_type/node_id")
 
@@ -54,6 +67,7 @@ def init():
 
     # Start server and node execution
     node_0.start()
+
 
 
 try:
