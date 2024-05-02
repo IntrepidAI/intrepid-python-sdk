@@ -21,13 +21,15 @@ from intrepid.utils import log, log_exception, signal_handler
 from intrepid.status import Status
 from intrepid.node import Node, DataType, DataElement
 from intrepid.qos import Qos
-from intrepid.message import IntrepidMessage, Opcode
+from intrepid.message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
 from datetime import datetime
 
 
 import aiohttp
 from aiohttp import web, WSCloseCode
 import asyncio
+import json
+
 
 __name__ = 'intrepid'
 __version__ = importlib_metadata.distribution(__name__).version
@@ -46,62 +48,28 @@ signal.signal(signal.SIGINT, signal_handler)
 # COLOR_RESET = "\033[0m"
 
 # Custom logging format with timestamp
-# log_format = "%(asctime)s - %(levelname)s - %(message)s"
-# logging.basicConfig(format=log_format)
-# logger = logging.getLogger(__name__)  # Create a logger instance
+log_format = "%(asctime)s - %(levelname)s - %(message)s"
+logging.basicConfig(format=log_format)
+logger = logging.getLogger(__name__)  # Create a logger instance
 
-
-async def http_handler(request):
-    # TODO serve http request
-    return web.Response(text='Hello, world')
-
-async def websocket_handler(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    async for msg in ws:
-        if msg.type == aiohttp.WSMsgType.TEXT:
-            if msg.data == 'close':
-                await ws.close()
-            else:
-                await ws.send_str('some websocket message payload')
-        elif msg.type == aiohttp.WSMsgType.ERROR:
-            print('ws connection closed with exception %s' % ws.exception())
-
-    return ws
-
-def create_runner():
-    app = web.Application()
-    app.add_routes([
-        web.get('/',   http_handler),
-        web.get('/ws', websocket_handler),
-    ])
-    return web.AppRunner(app)
-
-async def start_server(host="127.0.0.1", port=9999):
-    runner = create_runner()
-    await runner.setup()
-    site = web.TCPSite(runner, host, port)
-    await site.start()
 
 # async def handler(websocket):
 #     async for message in websocket:
 #         # TODO inspect message and execute action
-
 #         await websocket.send(message)
-
+#
 # TODO now it just echoes
 # async def wsserver(unix_socket_path: str):
 #     # Remove the socket file if it already exists
 #     if os.path.exists(unix_socket_path):
 #         os.remove(unix_socket_path)
-
+#
 #     port = 9999
 #     # logger.info("Listening on port {}".format(port))
 #     log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_WSSERVER_READY.format(port))
 #     command = f"socat TCP-LISTEN:{port} UNIX-CONNECT:{unix_socket_path}"
 #     subprocess.Popen(command, shell=True)
-
+#
 #     async with unix_serve(handler, unix_socket_path):
 #         await asyncio.Future()  # run forever
 
@@ -121,8 +89,83 @@ class Intrepid:
         self.node_id = str(node_id)
         self.qos = None
         self.__unix_socket_path = None
+        self.__node = None
         self.__node_info = None
         self.__callback = None
+
+
+    async def http_handler(self, request):
+        # serve http request
+        # announce node specs as http response
+        mynode_json = self.__node.to_json()
+        return web.json_response(mynode_json)
+        # return web.Response(text=mynode_json)
+
+    async def websocket_handler(self, request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+
+        async for msg in ws:
+            if msg.type == aiohttp.WSMsgType.TEXT:
+                msg_dict = json.loads(msg.data)
+                init_object = msg_dict.get("init")
+                exec_object = msg_dict.get("exec")
+
+                if init_object:
+                    # print(msg_dict, type(msg_dict))
+                    irm = InitRequest(init_object["node_id"], init_object["node_type"])
+                    irm.exec_inputs = init_object["exec_inputs"]
+                    irm.exec_outputs = init_object["exec_outputs"]
+                    # print(irm)
+                    await ws.send_str('Init OK')
+
+                elif exec_object:
+                    exec_id = exec_object.get("exec_id")
+                    time = exec_object.get("time")
+                    inputs = exec_object.get("inputs")
+
+                    if exec_id and time and inputs:
+                        exec_resp = ExecResponse()
+                        exec_resp.time = time
+                        exec_resp.exec_id = 0
+
+                        # Execute callback function and return ExecResponse object
+                        # exec_resp.outputs = self.__callback(*inputs)
+                        out = self.__callback(*inputs)
+                        # print(out)
+                        if isinstance(out, list):
+                            exec_resp.outputs = out
+                        else:
+                            exec_resp.outputs = [out]
+
+                        await ws.send_str(exec_resp.to_json())
+                    else:
+                        print('ExecRequest has invalid payload')
+
+
+            # if msg.type == aiohttp.WSMsgType.TEXT:
+            #     if msg.data == 'close':
+            #         await ws.close()
+            #     else:
+            #         await ws.send_str('some websocket message payload')
+            elif msg.type == aiohttp.WSMsgType.ERROR:
+                print('Websocket connection closed with exception %s' % ws.exception())
+
+        return ws
+
+    def create_runner(self):
+        app = web.Application()
+        app.add_routes([
+            web.get('/',   self.http_handler),
+            web.get('/ws', self.websocket_handler),
+        ])
+        return web.AppRunner(app)
+
+    async def start_server(self, host="127.0.0.1", port=9999):
+        runner = self.create_runner()
+        await runner.setup()
+        site = web.TCPSite(runner, host, port)
+        await site.start()
 
     def start(self):
         if self.__callback is None:
@@ -138,7 +181,7 @@ class Intrepid:
         # asyncio.run(wsserver(self.__unix_socket_path))
 
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(start_server())
+        loop.run_until_complete(self.start_server())
         loop.run_forever()
 
     @staticmethod
@@ -148,6 +191,9 @@ class Intrepid:
         @return: _IntrepidConfig
         """
         return Intrepid.__get_instance().configuration_manager.intrepid_config
+
+    def register_node(self, node: Node):
+        self.__node = node
 
 
     def register_callback(self, func):

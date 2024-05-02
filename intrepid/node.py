@@ -72,7 +72,7 @@ class DataElement:
      type PinSpec = {
         label:        string;
         description?: string;
-        type:         { data: string } | 'flow' | 'wildcard' | 'any' | 'any_or_flow';
+        type:         { data: string} | 'flow' | 'wildcard' | 'any' | 'any_or_flow';
         container?:   'single' | 'option' | 'array' | 'any';
         count?:       'one' | 'zero_or_more';
         is_const?:    boolean;

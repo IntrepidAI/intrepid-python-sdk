@@ -37,36 +37,41 @@ def init():
     qos.set_history("KeepLast")
     qos.set_deadline(100)  # Deadline expressed in milliseconds
 
-    # Configure my node
+    # Create my node
     mynode = Node("my_type")
     mynode.add_input("in1", DataType.INTEGER)
     mynode.add_input("in2", DataType.FLOAT)
     mynode.add_input("in3", DataType.STRING)
     mynode.add_input("in4", DataType.FLOW)
     mynode.add_input("in5", DataType.ANY)
-
+    mynode.add_input("in5", DataType.ANY_OR_FLOW)
+    mynode.add_input("in5", DataType.WILDCARD)
     mynode.add_output("out1", DataType.FLOAT)
+
     mynode.get_inputs()
     mynode_json = mynode.to_json()
     print(mynode_json)
 
     # Write to Graph
-    node_0 = Intrepid(node_id="node_type/node_id")
+    node_handler = Intrepid(node_id="node_type/node_id")
+
+    node_handler.register_node(mynode)
+
 
     # Attach Qos policy to this node
-    node_0.create_qos(qos)
+    node_handler.create_qos(qos)
 
     # Request node status
-    node_status = node_0.status()
+    node_status = node_handler.status()
 
     # Request node info
-    node_info = node_0.info()
+    node_info = node_handler.info()
 
     # Register callback with node input. Callback and node inputs must have the same signature (same number/name/type)
-    node_0.register_callback(my_callback_function)
+    node_handler.register_callback(my_callback_function)
 
     # Start server and node execution
-    node_0.start()
+    node_handler.start()
 
 
 
