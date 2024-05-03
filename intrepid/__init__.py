@@ -10,7 +10,7 @@ from websockets.server import serve, unix_serve
 from intrepid.config import _IntrepidConfig
 import signal
 from intrepid.config_manager import ConfigManager
-from intrepid.constants import TAG_STATUS, TAG_HTTP_REQUEST, \
+from intrepid.constants import WS_HOST, WS_PORT, TAG_STATUS, TAG_HTTP_REQUEST, \
     INFO_STATUS_CHANGED, TAG_INITIALIZATION, INFO_CALLBACK_REGISTERED, \
     INFO_READY, INFO_WSSERVER_READY, INFO_STOPPED, INFO_SDK_READY, \
     ERROR_CONFIGURATION, ERROR_PARAM_TYPE, ERROR_PARAM_NUM, ERROR_PARAM_NAME, ERROR_REGISTER_CALLBACK
@@ -94,12 +94,10 @@ class Intrepid:
         self.__callback = None
 
 
-    async def http_handler(self, request):
-        # serve http request
-        # announce node specs as http response
-        mynode_json = self.__node.to_json()
-        return web.json_response(mynode_json)
-        # return web.Response(text=mynode_json)
+    # async def http_handler(self, request):
+    #     # announce node specs as http response
+    #     mynode_json = self.__node.to_json()
+    #     return web.json_response(mynode_json)
 
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
@@ -108,46 +106,53 @@ class Intrepid:
         async for msg in ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
                 msg_dict = json.loads(msg.data)
+
+                request_id = msg_dict.get("id")
+                discovery_object = msg_dict.get("discovery")
                 init_object = msg_dict.get("init")
                 exec_object = msg_dict.get("exec")
 
-                if init_object:
-                    # print(msg_dict, type(msg_dict))
+                if discovery_object is not None:
+                    await ws.send_json({
+                        "id": request_id,
+                        "discovery_ok": { "nodes": [ self.__node.to_dict() ] },
+                    })
+
+                elif init_object is not None:
                     irm = InitRequest(init_object["node_id"], init_object["node_type"])
                     irm.exec_inputs = init_object["exec_inputs"]
                     irm.exec_outputs = init_object["exec_outputs"]
-                    # print(irm)
-                    await ws.send_str('Init OK')
+                    await ws.send_json({
+                        "id": request_id,
+                        "init_ok": {},
+                    })
 
-                elif exec_object:
+                elif exec_object is not None:
                     exec_id = exec_object.get("exec_id")
                     time = exec_object.get("time")
                     inputs = exec_object.get("inputs")
 
-                    if exec_id and time and inputs:
+                    if exec_id is not None and \
+                        time is not None and \
+                            inputs is not None:
                         exec_resp = ExecResponse()
                         exec_resp.time = time
                         exec_resp.exec_id = 0
 
                         # Execute callback function and return ExecResponse object
-                        # exec_resp.outputs = self.__callback(*inputs)
                         out = self.__callback(*inputs)
-                        # print(out)
-                        if isinstance(out, list):
+                        if isinstance(out, tuple):
                             exec_resp.outputs = out
                         else:
-                            exec_resp.outputs = [out]
+                            exec_resp.outputs = (out, )
 
-                        await ws.send_str(exec_resp.to_json())
+                        await ws.send_json({
+                            "id": request_id,
+                            "exec_ok": exec_resp.to_dict(),
+                        })
                     else:
                         print('ExecRequest has invalid payload')
 
-
-            # if msg.type == aiohttp.WSMsgType.TEXT:
-            #     if msg.data == 'close':
-            #         await ws.close()
-            #     else:
-            #         await ws.send_str('some websocket message payload')
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 print('Websocket connection closed with exception %s' % ws.exception())
 
@@ -156,12 +161,12 @@ class Intrepid:
     def create_runner(self):
         app = web.Application()
         app.add_routes([
-            web.get('/',   self.http_handler),
-            web.get('/ws', self.websocket_handler),
+            # web.get('/',   self.http_handler),
+            web.get('/', self.websocket_handler),
         ])
         return web.AppRunner(app)
 
-    async def start_server(self, host="127.0.0.1", port=9999):
+    async def start_server(self, host=WS_HOST, port=WS_PORT):
         runner = self.create_runner()
         await runner.setup()
         site = web.TCPSite(runner, host, port)

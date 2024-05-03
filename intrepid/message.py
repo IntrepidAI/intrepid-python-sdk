@@ -73,14 +73,14 @@ class InitRequest:
         if isinstance(value, list) and all(isinstance(x, dict) for x in value):
             self._inputs = value
         else:
-            raise ValueError("inputs must be a list of numbers")
+            raise ValueError("data_inputs must be a list of dictionaries")
 
     @data_outputs.setter
     def data_outputs(self, value):
         if isinstance(value, list) and all(isinstance(x, dict) for x in value):
             self._outputs = value
         else:
-            raise ValueError("inputs must be a list of numbers")
+            raise ValueError("data_outputs must be a list of dictionaries")
 
 
     @property
@@ -89,10 +89,10 @@ class InitRequest:
 
     @exec_inputs.setter
     def exec_inputs(self, value):
-        if isinstance(value, list) and all(isinstance(x, (int, float)) for x in value):
+        if isinstance(value, list) and all(isinstance(x, dict) for x in value):
             self._exec_inputs = value
         else:
-            raise ValueError("exec_inputs must be a list of numbers")
+            raise ValueError("exec_inputs must be a list of dictionaries")
 
 
     @property
@@ -101,10 +101,10 @@ class InitRequest:
 
     @exec_outputs.setter
     def exec_outputs(self, value):
-        if isinstance(value, list) and all(isinstance(x, (int, float)) for x in value):
+        if isinstance(value, list) and all(isinstance(x, dict) for x in value):
             self._exec_outputs = value
         else:
-            raise ValueError("exec_inputs must be a list of numbers")
+            raise ValueError("exec_outputs must be a list of dictionaries")
 
 
     def set_node_id(self, node_id: str):
@@ -136,7 +136,7 @@ class ExecRequest:
 
     @property
     def exec_id(self):
-        return self._exec_inputs
+        return self._exec_id
 
     @exec_id.setter
     def exec_id(self, value):
@@ -147,7 +147,7 @@ class ExecRequest:
 
     @property
     def time(self):
-        return self._exec_inputs
+        return self._time
 
     @time.setter
     def time(self, value):
@@ -158,7 +158,7 @@ class ExecRequest:
 
     @property
     def inputs(self):
-        return self._outputs
+        return self._inputs
 
     @inputs.setter
     def inputs(self, value):
@@ -203,7 +203,7 @@ class ExecResponse:
 
     @outputs.setter
     def outputs(self, value):
-        if isinstance(value, list):
+        if isinstance(value, tuple):
             self._outputs = value
         else:
             raise ValueError("outputs must be a list")
@@ -211,8 +211,15 @@ class ExecResponse:
     def to_json(self):
         res = {
             "exec_id": self.exec_id,
-            "time": self.time,
+            #"time": self.time,
             "outputs": self.outputs
             }
 
         return json.dumps(res, cls=CustomEncoder)
+
+    def to_dict(self):
+        return {
+            "exec_id": self.exec_id,
+            #"time": self.time,
+            "outputs": self.outputs
+        }

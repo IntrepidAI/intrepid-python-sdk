@@ -4,7 +4,8 @@ URL_DECISION_API = "https://api.intrepid.ai/v1/"
 URL_GRAPHS = "/graphs"
 URL_TRACKING = "https://events.intrepid.ai/"
 URL_ACTIVATE = URL_DECISION_API + "activate"
-
+WS_HOST = "127.0.0.1"
+WS_PORT = 9999
 
 
 # TAGS

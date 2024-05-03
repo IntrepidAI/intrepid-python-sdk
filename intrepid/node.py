@@ -27,18 +27,10 @@ class DataType(Enum):
     WILDCARD = 5
     ANY = 6
     ANY_OR_FLOW = 7
-    # DICT = 8
+    BOOLEAN = 8
 
-    def __str__ (self):
-        if self == DataType.INTEGER:
-            # pdt = PrimitiveDataType("integer")
-            # return pdt.to_dict()
-            return "integer"
-        elif self == DataType.FLOAT:
-            return "float"
-        elif self == DataType.STRING:
-            return "string"
-        elif self == DataType.FLOW:
+    def to_dict(self):
+        if self == DataType.FLOW:
             return "flow"
         elif self == DataType.WILDCARD:
             return "wildcard"
@@ -46,26 +38,33 @@ class DataType(Enum):
             return "any"
         elif self == DataType.ANY_OR_FLOW:
             return "any_or_flow"
-        # elif self == DataType.DICT:
-        #     return "dict"
         else:
-            return super().__str__()
+            return {"data": self.name.lower()}
 
-    def to_dict(self):
-        if self == DataType.INTEGER:
-            return {"data": "integer"}
-        elif self == DataType.FLOAT:
-            return {"data": "float"}
-        elif self == DataType.STRING:
-            return {"data": "string"}
-        elif self == DataType.FLOW:
-            return {"data": "flow"}
-        elif self == DataType.WILDCARD:
-            return {"data": "wildcard"}
-        elif self == DataType.ANY:
-            return {"data": "any"}
-        elif self == DataType.ANY_OR_FLOW:
-            return {"data": "any_or_flow"}
+
+    def __str__(self):
+        return self.name.lower()
+
+    @classmethod
+    def from_dict(cls, data):
+        for enum_member in cls:
+            if enum_member.name.lower() == data.get("data"):
+                return enum_member
+        raise ValueError("Invalid data type")
+
+    @classmethod
+    def from_str(cls, data):
+        try:
+            return cls[data.upper()]
+        except KeyError:
+            raise ValueError("Invalid data type")
+
+    # def to_dict(self):
+    #     return {"data": str(self)}
+
+    # @classmethod
+    # def from_dict(cls, data):
+    #     return cls.from_str(data["data"])
 
 class DataElement:
     """
@@ -84,32 +83,38 @@ class DataElement:
         self.type = type
 
     def to_dict(self):
-        if self.type == DataType.INTEGER:
-            return {
-                "label": self.label,
-                "type": {
-                    "data": "integer"
-                    }
-                }
+        # if self.type == DataType.INTEGER:
+        #     return {
+        #         "label": self.label,
+        #         "type": {
+        #             "data": "integer"
+        #             }
+        #         }
 
-        if self.type == DataType.FLOAT:
-                    return {
-                        "label": self.label,
-                        "type": {
-                            "data": "float"
-                            }
-                        }
-
-        if self.type == DataType.STRING:
-                    return {
-                        "label": self.label,
-                        "type": {
-                            "data": "string"
-                            }
-                        }
+        # if self.type == DataType.FLOAT:
+        #             return {
+        #                 "label": self.label,
+        #                 "type": {
+        #                     "data": "float"
+        #                     }
+        #                 }
+        # if self.type == DataType.BOOLEAN:
+        #                     return {
+        #                         "label": self.label,
+        #                         "type": {
+        #                             "data": "boolean"
+        #                             }
+        #                         }
+        # if self.type == DataType.STRING:
+        #             return {
+        #                 "label": self.label,
+        #                 "type": {
+        #                     "data": "string"
+        #                     }
+        #                 }
 
         return {"label": self.label,
-                "type": self.type}
+                "type": self.type.to_dict()}
 
 
 
@@ -172,7 +177,17 @@ class Node:
 
         return json.dumps(res, cls=CustomEncoder)
 
-
+    def to_dict(self) -> dict:
+        inputs_json = [input_element.to_dict() for input_element in self.inputs]
+        outputs_json = [output_element.to_dict() for output_element in self.outputs]
+        res = {
+            "inputs": inputs_json,
+            "outputs": outputs_json,
+            "type": self.type,
+            "label": self.label,
+            "description": self.description
+            }
+        return res
 
 if __name__ == '__main__':
     n0 = Node()

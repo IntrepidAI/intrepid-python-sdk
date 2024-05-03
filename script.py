@@ -23,10 +23,10 @@ from intrepid import Intrepid, Qos, Node, DataType
 
 
 # Callback function to execute when inputs are ready
-def my_callback_function(in1: int, in2:int) -> int:
+def my_callback_function(in1: int, in2:int) -> (float, bool):
     # Add code here
-
-    return in1 + in2
+    time.sleep(0.2)
+    return 1. * (in1 + in2), True
 
 
 def init():
@@ -39,14 +39,17 @@ def init():
 
     # Create my node
     mynode = Node("my_type")
+    mynode.add_input("flow", DataType.FLOW)
     mynode.add_input("in1", DataType.INTEGER)
-    mynode.add_input("in2", DataType.FLOAT)
-    mynode.add_input("in3", DataType.STRING)
-    mynode.add_input("in4", DataType.FLOW)
-    mynode.add_input("in5", DataType.ANY)
-    mynode.add_input("in5", DataType.ANY_OR_FLOW)
-    mynode.add_input("in5", DataType.WILDCARD)
+    mynode.add_input("in2", DataType.INTEGER)
+    # mynode.add_input("in3", DataType.STRING)
+    # mynode.add_input("in4", DataType.FLOW)
+    # mynode.add_input("in5", DataType.ANY)
+    # mynode.add_input("in5", DataType.ANY_OR_FLOW)
+    # mynode.add_input("in5", DataType.WILDCARD)
+    mynode.add_output("flow", DataType.FLOW)
     mynode.add_output("out1", DataType.FLOAT)
+    mynode.add_output("is_float", DataType.BOOLEAN)
 
     mynode.get_inputs()
     mynode_json = mynode.to_json()
