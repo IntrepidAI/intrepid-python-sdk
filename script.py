@@ -25,7 +25,7 @@ from intrepid import Intrepid, Qos, Node, DataType
 # Callback function to execute when inputs are ready
 def my_callback_function(in1: int, in2:int) -> (float, bool):
     # Add code here
-    time.sleep(0.2)
+    time.sleep(0.02)
     return 1. * (in1 + in2), True
 
 
@@ -56,7 +56,7 @@ def init():
     print(mynode_json)
 
     # Write to Graph
-    node_handler = Intrepid(node_id="node_type/node_id")
+    node_handler = Intrepid(node_id="python/project/node_type/node_id")
 
     node_handler.register_node(mynode)
 
