@@ -164,6 +164,9 @@ class Node:
     def get_outputs(self):
         return [(index, element.label, element.type) for index, element in enumerate(self.outputs)]
 
+    def get_type(self) -> str:
+        return self.type
+
     def to_json(self):
         inputs_json = [input_element.to_dict() for input_element in self.inputs]
         outputs_json = [output_element.to_dict() for output_element in self.outputs]

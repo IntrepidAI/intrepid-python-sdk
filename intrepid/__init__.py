@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)  # Create a logger instance
 class Intrepid:
     __instance = None
 
-    def __init__(self, node_id):
+    def __init__(self):
         """
         Initialize the Intrepid SDK.
 
@@ -86,7 +86,6 @@ class Intrepid:
         @return:
         """
 
-        self.node_id = str(node_id)
         self.qos = None
         self.__unix_socket_path = None
         self.__node = None
@@ -168,6 +167,7 @@ class Intrepid:
 
     async def start_server(self, host=WS_HOST, port=WS_PORT):
         runner = self.create_runner()
+        print("Listening on host {}:{}".format(host, port))
         await runner.setup()
         site = web.TCPSite(runner, host, port)
         await site.start()
@@ -254,7 +254,7 @@ class Intrepid:
         Write data to node output target.
         @return
         """
-        return Intrepid.__get_instance().write(self.node_id, target, data)
+        return Intrepid.__get_instance().write(target, data)
 
     @staticmethod
     def stop():
