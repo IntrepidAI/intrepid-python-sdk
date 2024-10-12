@@ -190,7 +190,7 @@ An authentication token is necessary to publish a node to a user library. Such t
 
 
 ```Bash
-./intrepid-agent publish node/sdk/ex1 --load ws://127.0.0.1:9999 https://labs.
+./intrepid-agent publish node/sdk/ex1 --load ws://127.0.0.1:9999 https://labs.intrepid.ai/projects/34/r3Gvmurb5cYdrzMJVLFGotpm
 
 ```
 
