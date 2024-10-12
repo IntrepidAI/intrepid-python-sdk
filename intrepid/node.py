@@ -28,6 +28,10 @@ class DataType(Enum):
     ANY = 6
     ANY_OR_FLOW = 7
     BOOLEAN = 8
+    VEC2 = 9
+    VEC3 = 10
+    BIVEC2 = 11
+    BIVEC3 = 12
 
     def to_dict(self):
         if self == DataType.FLOW:

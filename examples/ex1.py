@@ -10,14 +10,13 @@ def my_callback_function(in1: int, in2:int) -> (float, bool):
 
 
 # Create QoS policy for function node
-# Create QoS policy for function node
 qos = Qos(reliability="BestEffort", durability="TransientLocal")
 qos.set_history("KeepLast")
 qos.set_deadline(100)  # Deadline expressed in milliseconds
 
 
 # Create my node
-node_type = "node/sdk/ex1"
+node_type = "node/sdk/ex1-iros"
 mynode = Node(node_type)
 mynode.add_input("flow", DataType.FLOW)
 mynode.add_input("in1", DataType.INTEGER)
