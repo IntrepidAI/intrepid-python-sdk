@@ -26,7 +26,7 @@ from datetime import datetime
 
 
 import aiohttp
-from aiohttp import web, WSCloseCode    
+from aiohttp import web, WSCloseCode
 import asyncio
 import json
 
