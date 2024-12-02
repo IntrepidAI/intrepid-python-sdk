@@ -1,4 +1,4 @@
-from intrepid.constants import ERROR_INITIALIZATION_PARAM, ERROR_CACHE_HIT_TIMEOUT, ERROR_CACHE_HIT_LOOKUP_FORMAT
+from intrepid_python_sdk.constants import ERROR_INITIALIZATION_PARAM, ERROR_CACHE_HIT_TIMEOUT, ERROR_CACHE_HIT_LOOKUP_FORMAT
 
 class IntrepidException(Exception):
     def __init__(self, message):

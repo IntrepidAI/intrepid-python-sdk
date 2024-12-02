@@ -1,4 +1,4 @@
-from intrepid import Intrepid, Qos, Node, DataType
+from intrepid_python_sdk import Intrepid, Qos, Node, DataType
 import time
 
 

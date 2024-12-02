@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from enum import Enum
 import logging
-from intrepid.decorators import param_types_validator
+from intrepid_python_sdk.decorators import param_types_validator
 
 
 class LogLevel(Enum):

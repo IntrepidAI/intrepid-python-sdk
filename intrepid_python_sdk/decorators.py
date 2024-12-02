@@ -1,7 +1,7 @@
 import inspect
 
-from intrepid.constants import ERROR_PARAM_TYPE
-from intrepid.errors import ParamTypeError
+from intrepid_python_sdk.constants import ERROR_PARAM_TYPE
+from intrepid_python_sdk.errors import ParamTypeError
 from functools import wraps
 import errno
 import os

@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 import json
 
-from intrepid.node import CustomEncoder
+from intrepid_python_sdk.node import CustomEncoder
 
 class Opcode(Enum):
     READ = 1

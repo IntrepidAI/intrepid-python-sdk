@@ -8,7 +8,7 @@ import traceback
 from abc import abstractmethod, ABC
 
 # from intrepid.constants import TAG_CACHE_MANAGER
-from intrepid.utils import log_exception
+from intrepid_python_sdk.utils import log_exception
 
 
 class HitCacheImplementation:

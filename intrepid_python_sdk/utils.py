@@ -4,8 +4,8 @@ import json
 import signal
 import sys
 
-import intrepid
-from intrepid.constants import WARNING_CONFIGURATION_PARAM_TYPE, WARNING_CONFIGURATION_PARAM_MIN_MAX
+import intrepid_python_sdk
+from intrepid_python_sdk.constants import WARNING_CONFIGURATION_PARAM_TYPE, WARNING_CONFIGURATION_PARAM_MIN_MAX
 
 def signal_handler(sig, frame):
     print("Ctrl+C detected. Goodbye...")
@@ -15,7 +15,7 @@ def signal_handler(sig, frame):
 
 
 def log(tag, level, message, start_config=None):
-    configuration = start_config if start_config is not None else intrepid.Intrepid.config()
+    configuration = start_config if start_config is not None else intrepid_python_sdk.Intrepid.config()
     if configuration is not None:
         custom_log_manager = configuration.log_manager
         custom_log_level = configuration.log_level
@@ -24,7 +24,7 @@ def log(tag, level, message, start_config=None):
 
 
 def log_exception(tag, exception, traceback):
-    configuration = intrepid.Intrepid.config()
+    configuration = intrepid_python_sdk.Intrepid.config()
     configured_log_manager = configuration.log_manager if configuration is not None else None
     if configured_log_manager is not None:
         configured_log_manager.exception(tag, exception, traceback)
@@ -34,7 +34,7 @@ def get_args_or_default(key, expected_type, default_value, kwargs):
     if key not in kwargs:
         return default_value or None
     elif not isinstance(kwargs[key], expected_type):
-        from intrepid import LogLevel
+        from intrepid_python_sdk import LogLevel
         log(LogLevel.WARNING, WARNING_CONFIGURATION_PARAM_TYPE.format(key))
     else:
         return kwargs[key]

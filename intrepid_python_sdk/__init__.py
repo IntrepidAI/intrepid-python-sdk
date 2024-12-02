@@ -7,31 +7,31 @@ import importlib_metadata
 import os, sys
 import subprocess
 from websockets.server import serve, unix_serve
-from intrepid.config import _IntrepidConfig
+from intrepid_python_sdk.config import _IntrepidConfig
 import signal
-from intrepid.config_manager import ConfigManager
-from intrepid.constants import WS_HOST, WS_PORT, TAG_STATUS, TAG_HTTP_REQUEST, \
+from intrepid_python_sdk.config_manager import ConfigManager
+from intrepid_python_sdk.constants import WS_HOST, WS_PORT, TAG_STATUS, TAG_HTTP_REQUEST, \
     INFO_STATUS_CHANGED, TAG_INITIALIZATION, INFO_CALLBACK_REGISTERED, \
     INFO_READY, INFO_WSSERVER_READY, INFO_STOPPED, INFO_SDK_READY, \
     ERROR_CONFIGURATION, ERROR_PARAM_TYPE, ERROR_PARAM_NUM, ERROR_PARAM_NAME, ERROR_REGISTER_CALLBACK
-from intrepid.decorators import param_types_validator
-from intrepid.errors import InitializationParamError
-from intrepid.log_manager import LogLevel
-from intrepid.utils import log, log_exception, signal_handler
-from intrepid.status import Status
-from intrepid.node import Node, DataType, DataElement
-from intrepid.qos import Qos
-from intrepid.message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
+from intrepid_python_sdk.decorators import param_types_validator
+from intrepid_python_sdk.errors import InitializationParamError
+from intrepid_python_sdk.log_manager import LogLevel
+from intrepid_python_sdk.utils import log, log_exception, signal_handler
+from intrepid_python_sdk.status import Status
+from intrepid_python_sdk.node import Node, DataType, DataElement
+from intrepid_python_sdk.qos import Qos
+from intrepid_python_sdk.message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
 from datetime import datetime
 
 
 import aiohttp
-from aiohttp import web, WSCloseCode
+from aiohttp import web, WSCloseCode    
 import asyncio
 import json
 
 
-__name__ = 'intrepid'
+__name__ = 'intrepid_python_sdk'
 __version__ = importlib_metadata.distribution(__name__).version
 
 
@@ -52,26 +52,6 @@ log_format = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(format=log_format)
 logger = logging.getLogger(__name__)  # Create a logger instance
 
-
-# async def handler(websocket):
-#     async for message in websocket:
-#         # TODO inspect message and execute action
-#         await websocket.send(message)
-#
-# TODO now it just echoes
-# async def wsserver(unix_socket_path: str):
-#     # Remove the socket file if it already exists
-#     if os.path.exists(unix_socket_path):
-#         os.remove(unix_socket_path)
-#
-#     port = 9999
-#     # logger.info("Listening on port {}".format(port))
-#     log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_WSSERVER_READY.format(port))
-#     command = f"socat TCP-LISTEN:{port} UNIX-CONNECT:{unix_socket_path}"
-#     subprocess.Popen(command, shell=True)
-#
-#     async with unix_serve(handler, unix_socket_path):
-#         await asyncio.Future()  # run forever
 
 
 class Intrepid:
