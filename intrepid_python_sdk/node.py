@@ -18,8 +18,65 @@ class PrimitiveDataType:
     def to_dict(self):
         return { "data": self.type }
 
+class IntrepidType:
+    def __init__(self, base_type, is_array=False):
+        """
+        Initialize a DataType.
 
-class DataType(Enum):
+        :param base_type: The base type, either a BaseDataType.
+        :param container_type: Whether this is a container type like an array.
+        """
+        if not isinstance(base_type, Type):
+            raise ValueError("base_type must be a BaseDataType")
+        self.base_type = base_type
+        self.container_type = is_array
+
+    def is_array(self):
+        """
+        Check if this DataType is an array.
+        """
+        return self.container_type
+
+    def to_dict(self):
+        """
+        Convert the DataType to a dictionary representation.
+        """
+        if self.is_array():
+            return {"data": f"array<{self.base_type.to_flat_dict()}>" }
+        else:
+            return self.base_type.to_dict()
+
+    @classmethod
+    def from_dict(cls, data):
+        """
+        Create a DataType from a dictionary representation.
+        """
+        if data.get("type") == "array":
+            base_type = cls.from_dict(data.get("of"))
+            return cls(base_type, container_type=True)
+        else:
+            base_type_name = data.get("type").upper()
+            if base_type_name in Type.__members__:
+                return cls(Type[base_type_name])
+            raise ValueError(f"Invalid base type: {base_type_name}")
+
+    def __str__(self):
+        """
+        String representation of the DataType.
+        """
+        if self.is_array():
+            return f"array<{self.base_type}>"
+        return self.base_type.name.lower()
+
+    def __eq__(self, other):
+        """
+        Equality comparison for DataType.
+        """
+        return isinstance(other, IntrepidType) and self.base_type == other.base_type and self.container_type == other.container_type
+
+
+
+class Type(Enum):
     INTEGER = 1
     FLOAT = 2
     STRING = 3
@@ -32,18 +89,26 @@ class DataType(Enum):
     VEC3 = 10
     BIVEC2 = 11
     BIVEC3 = 12
+    ARRAY = 13
 
     def to_dict(self):
-        if self == DataType.FLOW:
+        if self == Type.FLOW:
             return "flow"
-        elif self == DataType.WILDCARD:
+
+        elif self == Type.WILDCARD:
             return "wildcard"
-        elif self == DataType.ANY:
+
+        elif self == Type.ANY:
             return "any"
-        elif self == DataType.ANY_OR_FLOW:
+
+        elif self == Type.ANY_OR_FLOW:
             return "any_or_flow"
+
         else:
             return {"data": self.name.lower()}
+
+    def to_flat_dict(self):
+        return self.name.lower()
 
 
     def __str__(self):
@@ -82,45 +147,13 @@ class DataElement:
     }
     """
 
-    def __init__(self, label: str, type: DataType):
+    def __init__(self, label: str, type: IntrepidType):
         self.label = label
         self.type = type
 
     def to_dict(self):
-        # if self.type == DataType.INTEGER:
-        #     return {
-        #         "label": self.label,
-        #         "type": {
-        #             "data": "integer"
-        #             }
-        #         }
-
-        # if self.type == DataType.FLOAT:
-        #             return {
-        #                 "label": self.label,
-        #                 "type": {
-        #                     "data": "float"
-        #                     }
-        #                 }
-        # if self.type == DataType.BOOLEAN:
-        #                     return {
-        #                         "label": self.label,
-        #                         "type": {
-        #                             "data": "boolean"
-        #                             }
-        #                         }
-        # if self.type == DataType.STRING:
-        #             return {
-        #                 "label": self.label,
-        #                 "type": {
-        #                     "data": "string"
-        #                     }
-        #                 }
-
         return {"label": self.label,
                 "type": self.type.to_dict()}
-
-
 
 class Node:
     """
@@ -134,8 +167,6 @@ class Node:
         inputs?:      PinSpec[];
         outputs?:     PinSpec[];
     }
-
-
     """
 
     def __init__(self, type: str):
@@ -152,12 +183,12 @@ class Node:
     def add_description(self, description: str):
         self.description = description
 
-    def add_input(self, label: str, type: DataType):
+    def add_input(self, label: str, type: Type):
         element = DataElement(label, type)
         self.inputs.append(element)
         # self.inputs.sort(key=lambda x: x.name)
 
-    def add_output(self, label: str, type: DataType):
+    def add_output(self, label: str, type: Type):
         element = DataElement(label, type)
         self.outputs.append(element)
         # self.outputs.sort(key=lambda x: x.name)
@@ -198,8 +229,12 @@ class Node:
 
 if __name__ == '__main__':
     n0 = Node()
-    n0.add_input("in1", DataType.INTEGER)
-    n0.add_input("in2", DataType.FLOAT)
-    # n0.add_input("in3", DataType.INTEGER)
-    n0.add_output("out1", DataType.FLOAT)
+
+    n0.add_input("in1", IntrepidType(Type.INTEGER))
+    n0.add_input("in2", IntrepidType(Type.FLOAT))
+    n0.add_input("in3", IntrepidType(Type.VEC3, is_array=True))
+    n0.add_output("out1", IntrepidType(Type.FLOAT))
     n0.get_inputs()
+
+    print(n0)
+

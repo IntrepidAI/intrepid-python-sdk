@@ -67,13 +67,11 @@ qos.set_deadline(100)  # Deadline expressed in milliseconds
 
 # Create my node
 mynode = Node("my_type")
-mynode.add_input("flow", DataType.FLOW)
-mynode.add_input("in1", DataType.INTEGER)
-mynode.add_input("in2", DataType.INTEGER)
-mynode.add_output("flow", DataType.FLOW)
-mynode.add_output("out1", DataType.FLOAT)
-mynode.add_output("is_float", DataType.BOOLEAN)
-
+mynode.add_input("flow", IntrepidType(Type.FLOW))
+mynode.add_input("in1", IntrepidType(Type.INTEGER))
+mynode.add_input("in2", IntrepidType(Type.FLOAT))
+mynode.add_input("in3", IntrepidType(Type.VEC3, is_array=True))
+mynode.add_output("out1", IntrepidType(Type.FLOAT))
 
 # Write to Graph
 node_handler = Intrepid(node_id="node_type/node_id")
@@ -106,12 +104,12 @@ An example node with 3 inputs and 3 outputs is provided below
 ```Python
 # Create my node
 mynode = Node("my_type")
-mynode.add_input("flow", DataType.FLOW)
-mynode.add_input("in1", DataType.INTEGER)
-mynode.add_input("in2", DataType.INTEGER)
-mynode.add_output("flow", DataType.FLOW)
-mynode.add_output("out1", DataType.FLOAT)
-mynode.add_output("is_float", DataType.BOOLEAN)
+mynode.add_input("flow", IntrepidType(Type.FLOW))
+mynode.add_input("in1", IntrepidType(Type.INTEGER))
+mynode.add_input("in2", IntrepidType(Type.INTEGER))
+mynode.add_output("flow", IntrepidType(Type.FLOW))
+mynode.add_output("out1", IntrepidType(Type.FLOAT))
+mynode.add_output("is_float", IntrepidType(Type.BOOLEAN))
 ```
 
 
@@ -190,7 +188,7 @@ An authentication token is necessary to publish a node to a user library. Such t
 
 
 ```Bash
-./intrepid-agent publish node/sdk/ex1 --load ws://127.0.0.1:9999 https://labs.intrepid.ai/projects/34/r3Gvmurb5cYdrzMJVLFGotpm
+./intrepid-agent publish node/sdk/ex1 --load ws://127.0.0.1:9999 https://labs.intrepid.ai/projects/34/r3Gv...otpm
 
 ```
 

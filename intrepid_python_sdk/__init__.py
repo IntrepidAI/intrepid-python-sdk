@@ -19,7 +19,7 @@ from intrepid_python_sdk.errors import InitializationParamError
 from intrepid_python_sdk.log_manager import LogLevel
 from intrepid_python_sdk.utils import log, log_exception, signal_handler
 from intrepid_python_sdk.status import Status
-from intrepid_python_sdk.node import Node, DataType, DataElement
+from intrepid_python_sdk.node import Node, Type, IntrepidType, DataElement
 from intrepid_python_sdk.qos import Qos
 from intrepid_python_sdk.message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
 from datetime import datetime
@@ -210,9 +210,9 @@ class Intrepid:
         # TODO this should be received from websocket client
         # TODO validate specs
         node = Node()
-        node.add_input("in1", DataType.INTEGER)
-        node.add_input("in2", DataType.INTEGER)
-        node.add_output("out1", DataType.FLOAT)
+        node.add_input("in1", IntrepidType(Type.INTEGER))
+        node.add_input("in2", IntrepidType(Type.INTEGER))
+        node.add_output("out1", IntrepidType(Type.FLOAT))
 
         return Intrepid.__get_instance().__node_specs(node)
 
@@ -364,7 +364,7 @@ class Intrepid:
                     return False
                 # You may want to add more sophisticated type checking here
                 # For simplicity, I'm just checking if the data types match exactly
-                if not isinstance(input_type, DataType):
+                if not isinstance(input_type, Type):
                     return False
 
             return True

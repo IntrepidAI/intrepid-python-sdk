@@ -16,14 +16,16 @@ qos.set_deadline(100)  # Deadline expressed in milliseconds
 
 
 # Create my node
-node_type = "node/sdk/ex1-iros"
+node_type = "node/sdk/ex1"
 mynode = Node(node_type)
 mynode.add_input("flow", IntrepidType(Type.FLOW))
-mynode.add_input("in1", IntrepidType(Type.INTEGER))
-mynode.add_input("in2", IntrepidType(Type.INTEGER))
-mynode.add_output("flow", IntrepidType(Type.FLOW))
-mynode.add_output("out1", IntrepidType(Type.FLOAT))
-mynode.add_output("is_float", IntrepidType(Type.BOOLEAN))
+mynode.add_input("in1",  IntrepidType(Type.INTEGER))
+mynode.add_input("in2",  IntrepidType(Type.INTEGER))
+mynode.add_input("in3",  IntrepidType(Type.VEC3, is_array=True))
+
+mynode.add_output("flow", Type.FLOW)
+mynode.add_output("out1", Type.FLOAT)
+mynode.add_output("is_float", Type.BOOLEAN)
 print("Created node ", mynode.get_type())
 
 # Write to Graph
