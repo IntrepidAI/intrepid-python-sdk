@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "intrepid-python-sdk"
-version = "0.1.4"
+version = "0.1.5"
 description = "Intrepid Python SDK"
 authors = ["frag <francesco@intrepid.ai>"]
 license = "Apache License Version 2.0"

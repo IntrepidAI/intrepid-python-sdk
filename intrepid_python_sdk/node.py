@@ -39,12 +39,15 @@ class IntrepidType:
 
     def to_dict(self):
         """
-        Convert the DataType to a dictionary representation.
+        Convert the IntrepidType to a dictionary representation.
         """
-        if self.is_array():
-            return {"data": f"array<{self.base_type.to_flat_dict()}>" }
+        base_dict = self.base_type.to_dict()
+        result = {"type": base_dict}
+
+        if not self.is_array():
+            return result["type"]
         else:
-            return self.base_type.to_dict()
+            return result["type"]
 
     @classmethod
     def from_dict(cls, data):
@@ -107,10 +110,6 @@ class Type(Enum):
         else:
             return {"data": self.name.lower()}
 
-    def to_flat_dict(self):
-        return self.name.lower()
-
-
     def __str__(self):
         return self.name.lower()
 
@@ -127,9 +126,6 @@ class Type(Enum):
             return cls[data.upper()]
         except KeyError:
             raise ValueError("Invalid data type")
-
-    # def to_dict(self):
-    #     return {"data": str(self)}
 
     # @classmethod
     # def from_dict(cls, data):
@@ -152,8 +148,12 @@ class DataElement:
         self.type = type
 
     def to_dict(self):
-        return {"label": self.label,
-                "type": self.type.to_dict()}
+        result = {}
+        result["label"] = self.label
+        result["type"] = self.type.to_dict()
+        if self.type.is_array():
+            result["container"] = "array"
+        return result
 
 class Node:
     """
@@ -175,7 +175,6 @@ class Node:
         self.type = type
         self.description = ""
         self.label = ""
-
 
     def add_label(self, label: str):
         self.label = label
