@@ -2,12 +2,11 @@ from intrepid_python_sdk import Intrepid, Qos, Node, IntrepidType, Type
 
 
 # Callback function to execute when inputs are ready
-def my_callback_function():
+
+def foo(agent_id: int) -> float:
     my_vars = []
-    def foo(agent_id: int) -> float:
-        # do something with my_vars
-        return 1.0
-    return foo
+    # do something with my_vars
+    return 1.0
 
 
 # Create QoS policy for function node
@@ -25,6 +24,6 @@ service_handler.register_node(mynode)
 # Attach QoS policy to this node
 service_handler.create_qos(qos)
 # Register callback with node input. Callback and node inputs must have the same signature (same number/name/type)
-service_handler.register_callback(my_callback_function)
+service_handler.register_callback(lambda: foo())
 # Start server and node execution
 service_handler.start()

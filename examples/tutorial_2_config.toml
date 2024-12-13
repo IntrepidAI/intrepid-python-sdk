@@ -21,3 +21,7 @@ reliability = "BestEffort"
 durability = "TransientLocal"
 history = "KeepLast"
 deadline = 100  # Deadline in milliseconds
+
+[server]
+host = "localhost"
+port = 9999

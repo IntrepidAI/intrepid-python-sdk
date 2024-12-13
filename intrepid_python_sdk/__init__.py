@@ -42,7 +42,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 # TODO remove this and use log_manager
 # Configure logging
-# logging.basicConfig(level=logging.INFO)  # Set the logging level to INFO or desired level
+logging.basicConfig(level=logging.INFO)  # Set the logging level to INFO or desired level
 # Define ANSI escape codes for colors
 # COLOR_RED = "\033[91m"
 # COLOR_RESET = "\033[0m"
@@ -56,6 +56,8 @@ logger = logging.getLogger(__name__)  # Create a logger instance
 
 class Intrepid:
     __instance = None
+    __restarted = None
+    __original_callback = None
 
     def __init__(self):
         """
@@ -72,70 +74,130 @@ class Intrepid:
         self.__node_info = None
         self.__callback = None
 
-
-    # async def http_handler(self, request):
-    #     # announce node specs as http response
-    #     mynode_json = self.__node.to_json()
-    #     return web.json_response(mynode_json)
-
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
         await ws.prepare(request)
+        logger.info("WebSocket connection established.")
+        func = self.__callback()
 
-        async for msg in ws:
-            if msg.type == aiohttp.WSMsgType.TEXT:
-                msg_dict = json.loads(msg.data)
+        closed_abnormally = False  # Flag to determine if restart is needed
+        try:
+            async for msg in ws:
+                # print(msg)
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    msg_dict = json.loads(msg.data)
+                    request_id = msg_dict.get("id")
+                    discovery_object = msg_dict.get("discovery")
+                    init_object = msg_dict.get("init")
+                    # print(init_object)
+                    if init_object is not None:
+                        logger.info("Agent reset. Restarting node...")
+                        # self.restart_node()
 
-                request_id = msg_dict.get("id")
-                discovery_object = msg_dict.get("discovery")
-                init_object = msg_dict.get("init")
-                exec_object = msg_dict.get("exec")
-
-                if discovery_object is not None:
-                    await ws.send_json({
-                        "id": request_id,
-                        "discovery_ok": { "nodes": [ self.__node.to_dict() ] },
-                    })
-
-                elif init_object is not None:
-                    irm = InitRequest(init_object["node_id"], init_object["node_type"])
-                    irm.exec_inputs = init_object["exec_inputs"]
-                    irm.exec_outputs = init_object["exec_outputs"]
-                    await ws.send_json({
-                        "id": request_id,
-                        "init_ok": {},
-                    })
-
-                elif exec_object is not None:
-                    exec_id = exec_object.get("exec_id")
-                    time = exec_object.get("time")
-                    inputs = exec_object.get("inputs")
-
-                    if exec_id is not None and \
-                        time is not None and \
-                            inputs is not None:
-                        exec_resp = ExecResponse()
-                        exec_resp.time = time
-                        exec_resp.exec_id = 0
-
-                        # Execute callback function and return ExecResponse object
-                        out = self.__callback(*inputs)
-                        if isinstance(out, tuple):
-                            exec_resp.outputs = out
-                        else:
-                            exec_resp.outputs = (out, )
-
+                    exec_object = msg_dict.get("exec")
+                    if discovery_object is not None:
                         await ws.send_json({
                             "id": request_id,
-                            "exec_ok": exec_resp.to_dict(),
+                            "discovery_ok": {"nodes": [self.__node.to_dict()]},
                         })
-                    else:
-                        print('ExecRequest has invalid payload')
+                    elif init_object is not None:
+                        irm = InitRequest(init_object["node_id"], init_object["node_type"])
+                        irm.exec_inputs = init_object["exec_inputs"]
+                        irm.exec_outputs = init_object["exec_outputs"]
+                        await ws.send_json({
+                            "id": request_id,
+                            "init_ok": {},
+                        })
+                    elif exec_object is not None:
+                        exec_id = exec_object.get("exec_id")
+                        time = exec_object.get("time")
+                        inputs = exec_object.get("inputs")
+                        if exec_id is not None and time is not None and inputs is not None:
+                            exec_resp = ExecResponse()
+                            exec_resp.time = time
+                            exec_resp.exec_id = 0
+                            # Execute callback function and return ExecResponse object
+                            # out = self.__callback(*inputs)
+                            out = func(*inputs)
+                            exec_resp.outputs = out if isinstance(out, tuple) else (out,)
+                            await ws.send_json({
+                                "id": request_id,
+                                "exec_ok": exec_resp.to_dict(),
+                            })
+                        else:
+                            logger.error("ExecRequest has invalid payload")
+                elif msg.type == aiohttp.WSMsgType.error:
+                    logger.error(f"WebSocket connection error: {ws.exception()}")
+                    closed_abnormally = True
+                    break
+                # elif msg.type == aiohttp.WSMsgType.CLOSE:
+                #     logger.info("WebSocket close message received.")
+                #     break
+        except Exception as e:
+            logger.error(f"WebSocket handler exception: {e}")
+            closed_abnormally = True
 
-            elif msg.type == aiohttp.WSMsgType.ERROR:
-                print('Websocket connection closed with exception %s' % ws.exception())
+        # if ws.closed:
+        #     print("websocket closed")
 
+        # finally:
+            # if ws.closed:
+            #     logger.info(f"WebSocket connection closed. Abnormal: {closed_abnormally}")
+            #     if closed_abnormally:
+            #         logger.info("WebSocket closed abnormally. Restarting node...")
+            #         print("Restarting node...")
+            #         await self.restart_node()
+            #     else:
+            #         logger.info("WebSocket closed normally.")
+            # else:
+            #     logger.warning("WebSocket connection finalized unexpectedly.")
         return ws
+
+
+    async def restart_node(self):
+        """
+        Restart the node by re-registering and resetting its state.
+        """
+        logger.info("Restarting the node...")
+        await asyncio.sleep(1.0)  # Allow loop to settle
+
+        # if self.__node:
+        #     self.register_node(self.__node)
+        #     if self.__callback:
+        #         self.register_callback(self.__callback)
+        # else:
+        #     logger.warning("Node is not registered. Skipping restart.")
+
+        # current_loop = asyncio.get_event_loop()
+        # tasks = asyncio.all_tasks(current_loop)
+        # for task in tasks:
+        #     task.cancel()
+        # try:
+        #     current_loop.stop()
+        # except Exception as e:
+        #     logger.warning(f"Error stopping the current loop: {e}")
+        # finally:
+        #     await asyncio.sleep(0.1)  # Allow loop to settle
+
+
+        logger.info(self.__original_callback)
+        # self.register_callback(self.__callback)
+        self.__callback = None
+        # Reset node information if needed
+        self.__node = None
+        self.__node_info = None
+
+        # Restart the node by re-registering the callback
+        if self.__original_callback is not None:
+            logger.info("Re-registering the original callback...")
+            self.register_callback(self.__original_callback)
+
+        self.__restarted = True
+        logger.info("Node restart completed.")
+        await asyncio.sleep(1.0)  # Allow loop to settle
+        # Close and clean up resources
+        self.cleanup()
+
 
     def create_runner(self):
         app = web.Application()
@@ -191,15 +253,16 @@ class Intrepid:
             # if not is_valid:
                 # print("Register callback not valid. Aborting...")
                 # return
+            self.__original_callback = func
             self.__callback = func
         else:
             if isinstance(self.__node, Node):
                 # TODO get node inputs here and pass to callback
+                self.__original_callback = func
                 return Intrepid.__get_instance().__register_callback(func, self.__node_info)
             else:
-                # logger.error(ERROR_REGISTER_CALLBACK)
+                logger.error(ERROR_REGISTER_CALLBACK)
                 log(TAG_HTTP_REQUEST, LogLevel.ERROR, ERROR_REGISTER_CALLBACK)
-
 
     @staticmethod
     def create_qos(qos: Qos):
@@ -342,16 +405,27 @@ class Intrepid:
             Validates if the parameters of the callback function match the inputs of the node.
             """
             # Get parameter names of the callback function
-            callback_params = callback.__code__.co_varnames[:callback.__code__.co_argcount]
-            # print("callback params: ", callback_params)
-            callback_param_types = callback.__annotations__  # This is a dictionary of parameter names and types
-            # print("Callback parameter types:", callback_param_types)
+            # callback_params = callback().__code__.co_varnames[:callback.__code__.co_argcount]
+            callback_param_types = callback().__annotations__  # This is a dictionary of parameter names and types
+            callback_return_values = []
+            if 'return' in callback_param_types:
+                callback_return_values = callback_param_types['return']
+                callback_param_types.pop('return', None)
 
+            callback_params = list(callback_param_types.keys())
+            print("callback params: ", callback_params)
+            print("Callback parameter types:", callback_param_types)
+            print("Callback return values: ", callback_return_values)
 
             # Get input names and data types of the node
             node_input_names = [input_element.label for input_element in node.inputs]
             if 'flow' in node_input_names:
                 node_input_names.remove('flow')
+
+            node_output_names = [output_element.label for output_element in node.outputs]
+            if 'flow' in node_output_names:
+                node_output_names.remove('flow')
+
             # print("Node input names:", node_input_names)
             # node_input_data_types = [input_element.type for input_element in node.inputs]
             node_input_data_types = []
@@ -360,7 +434,17 @@ class Intrepid:
                     continue
                 else:
                     node_input_data_types.append(input_element)
+                    # print(input_element)
             # print("Node input types: ", node_input_data_types)
+            node_output_data_types = []
+            for output_element in node.outputs:
+                if output_element.type.is_flow():
+                    continue
+                else:
+                    node_output_data_types.append(output_element)
+
+
+
 
             # Check if the number of parameters match
             if len(callback_params) != len(node_input_names):
@@ -378,5 +462,11 @@ class Intrepid:
                 if callback_param_types[input_name] != input_type.type.to_python_type():
                     print("Unexpected input type. Expected ", input_type.type.to_python_type(), "Found ", callback_param_types[input_name])
                     return False
+
+            for retval, output_type in zip(callback_return_values, node_output_data_types):
+                if retval != output_type.type.to_python_type():
+                    print("Unexpected input type. Expected ", output_type.type.to_python_type(), "Found ", callback_param_types[input_name])
+                    return False
+
             return True
 
