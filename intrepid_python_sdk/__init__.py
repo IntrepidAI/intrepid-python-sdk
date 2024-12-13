@@ -147,7 +147,7 @@ class Intrepid:
 
     async def start_server(self, host=WS_HOST, port=WS_PORT):
         runner = self.create_runner()
-        print("Listening on host {}:{}".format(host, port))
+        print("\nListening on host {}:{}".format(host, port))
         await runner.setup()
         site = web.TCPSite(runner, host, port)
         await site.start()
@@ -178,15 +178,23 @@ class Intrepid:
         return Intrepid.__get_instance().configuration_manager.intrepid_config
 
     def register_node(self, node: Node):
+        print("Registering node")
+        print(node)
         self.__node = node
-
 
     def register_callback(self, func):
         if self.__callback is None:
             log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_CALLBACK_REGISTERED)
+            # is_valid = Intrepid.__get_instance().__register_callback(func, self.__node)
+            is_valid = Intrepid.__Intrepid().__register_callback(func, self.__node)
+            # print("is_valid ", is_valid)
+            # if not is_valid:
+                # print("Register callback not valid. Aborting...")
+                # return
             self.__callback = func
         else:
-            if isinstance(self.__node_specs, Node):
+            if isinstance(self.__node, Node):
+                # TODO get node inputs here and pass to callback
                 return Intrepid.__get_instance().__register_callback(func, self.__node_info)
             else:
                 # logger.error(ERROR_REGISTER_CALLBACK)
@@ -199,22 +207,9 @@ class Intrepid:
         Return the details of this node
         @return: Status.
         """
+        print("\nAttaching QoS policy")
+        print(qos)
         return Intrepid.__get_instance().create_qos(qos)
-
-    def __node_specs(self, specs: Node):
-        """
-        Return the details of this node
-        @return: Status.
-        """
-
-        # TODO this should be received from websocket client
-        # TODO validate specs
-        node = Node()
-        node.add_input("in1", IntrepidType(Type.INTEGER))
-        node.add_input("in2", IntrepidType(Type.INTEGER))
-        node.add_output("out1", IntrepidType(Type.FLOAT))
-
-        return Intrepid.__get_instance().__node_specs(node)
 
     # @staticmethod
     def info(self) -> Node:
@@ -251,9 +246,13 @@ class Intrepid:
 
         :return: Intrepid
         """
-        if not Intrepid.__instance:
-            Intrepid.__instance = Intrepid.__Intrepid()
+        # if not Intrepid.__instance:
+        #     Intrepid.__instance = Intrepid.__Intrepid()
+        # return Intrepid.__instance
+        if Intrepid.__instance is None:
+            Intrepid.__instance = Intrepid.__Intrepid()  # Create the inner class instance
         return Intrepid.__instance
+
 
     @staticmethod
     def _update_status(new_status):
@@ -269,13 +268,17 @@ class Intrepid:
             self.configuration_manager = ConfigManager()
             self.device_context = {}
 
-        def __node_specs(self, specs):
-            self.node_specs = specs
-
-        def __register_callback(self, func):
-            is_valid = self.__validate_callback_parameters(self.node_specs, func)
-
-            self.callback = func
+        def __register_callback(self, func, node: Node):
+            print("Callback registered to node")
+            # print("Node specs: ", node)
+            is_valid = self.__validate_callback_parameters(node, func)
+            # print("Callback is valid: ", is_valid)
+            if is_valid:
+                print("Callback is valid. Proceeding...")
+                self.callback = func
+            else:
+                print("Callback input not valid. Aborting...")
+                return -1
 
         # @param_types_validator(True, str, str, [_IntrepidConfig, None])
         def start(self, env_id, api_key, intrepid_config):
@@ -317,9 +320,6 @@ class Intrepid:
             # TODO send msg over websocket
             self.status = Status.NOT_INITIALIZED
 
-        def info(self):
-            self.node_specs
-
         def write(self, node_id, target, data):
             recipient = node_id + '/' + target
             msg = IntrepidMessage(Opcode.WRITE, payload=data, timestamp=datetime.now(), recipient=recipient, priority=0)
@@ -327,7 +327,6 @@ class Intrepid:
             log(TAG_HTTP_REQUEST, LogLevel.DEBUG, msg)
 
             # TODO send msg over websocket
-
 
         def __log(self, tag, level, message):
             try:
@@ -344,29 +343,40 @@ class Intrepid:
             """
             # Get parameter names of the callback function
             callback_params = callback.__code__.co_varnames[:callback.__code__.co_argcount]
+            # print("callback params: ", callback_params)
+            callback_param_types = callback.__annotations__  # This is a dictionary of parameter names and types
+            # print("Callback parameter types:", callback_param_types)
+
 
             # Get input names and data types of the node
-            node_input_names = [input_element.name for input_element in node.inputs]
-            node_input_data_types = [input_element.data_type for input_element in node.inputs]
+            node_input_names = [input_element.label for input_element in node.inputs]
+            if 'flow' in node_input_names:
+                node_input_names.remove('flow')
+            # print("Node input names:", node_input_names)
+            # node_input_data_types = [input_element.type for input_element in node.inputs]
+            node_input_data_types = []
+            for input_element in node.inputs:
+                if input_element.type.is_flow():
+                    continue
+                else:
+                    node_input_data_types.append(input_element)
+            # print("Node input types: ", node_input_data_types)
 
             # Check if the number of parameters match
             if len(callback_params) != len(node_input_names):
                 logger.error(ERROR_PARAM_NUM.format(len(node_input_names)))
                 return False
 
-            # Check if parameter names and data types match
+            # # Check if parameter names and data types match
             for param_name, input_name, input_type in zip(callback_params, node_input_names, node_input_data_types):
                 if param_name != input_name:
                     # logger.error(ERROR_PARAM_NAME.format(param_name, input_name))
                     log(TAG_HTTP_REQUEST, LogLevel.ERROR, ERROR_PARAM_NAME.format(param_name, input_name))
-
                     # TODO check the type too
                     return False
-                # You may want to add more sophisticated type checking here
-                # For simplicity, I'm just checking if the data types match exactly
-                if not isinstance(input_type, Type):
+
+                if callback_param_types[input_name] != input_type.type.to_python_type():
+                    print("Unexpected input type. Expected ", input_type.type.to_python_type(), "Found ", callback_param_types[input_name])
                     return False
-
             return True
-
 

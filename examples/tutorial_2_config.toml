@@ -1,0 +1,23 @@
+[node]
+type = "frag/node/sdk/tutorial-2"
+
+[inputs]
+flow = "FLOW"
+agent_id = "INTEGER"
+drone_position = "VEC3"
+trajectory = { type = "VEC3", is_array = true }
+something = { type = "VEC3", is_array = true }
+
+[outputs]
+flow = "FLOW"
+altitude = "FLOAT"
+yaw = "FLOAT"
+vx = "FLOAT"
+vy = "FLOAT"
+vz = "FLOAT"
+
+[qos]
+reliability = "BestEffort"
+durability = "TransientLocal"
+history = "KeepLast"
+deadline = 100  # Deadline in milliseconds
