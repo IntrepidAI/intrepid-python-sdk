@@ -1,3 +1,12 @@
+"""
+Intrepid Python SDK example:
+
+- Node is declared with SDK utility functions
+- Callback function is declared and type annotated.
+- Callback is registered as a closure
+
+"""
+
 from intrepid_python_sdk import Intrepid, Qos, Node, Type, IntrepidType
 import time
 
@@ -16,7 +25,7 @@ qos.set_deadline(100)  # Deadline expressed in milliseconds
 
 
 # Create my node
-node_type = "node/sdk/ex1-iros"
+node_type = "node/sdk/2-node"
 mynode = Node(node_type)
 mynode.add_input("flow", IntrepidType(Type.FLOW))
 mynode.add_input("in1", IntrepidType(Type.INTEGER))
@@ -24,7 +33,6 @@ mynode.add_input("in2", IntrepidType(Type.INTEGER))
 mynode.add_output("flow", IntrepidType(Type.FLOW))
 mynode.add_output("out1", IntrepidType(Type.FLOAT))
 mynode.add_output("is_float", IntrepidType(Type.BOOLEAN))
-print("Created node ", mynode.get_type())
 
 # Write to Graph
 service_handler = Intrepid()
@@ -32,11 +40,9 @@ service_handler.register_node(mynode)
 
 # Attach Qos policy to this node
 service_handler.create_qos(qos)
-print("Attached QoS policy to node")
 
 # Register callback with node input. Callback and node inputs must have the same signature (same number/name/type)
-service_handler.register_callback(my_callback_function)
-print("Callback registered to node")
+service_handler.register_callback(lambda: my_callback_function)
 
 # Start server and node execution
 service_handler.start()

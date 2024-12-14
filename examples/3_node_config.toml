@@ -1,0 +1,17 @@
+[node]
+type = "frag/node/sdk/3-node"
+
+[inputs]
+flow = "FLOW"
+agent_id = "INTEGER"
+
+[outputs]
+flow = "FLOW"
+output1 = "FLOAT"
+
+
+[qos]
+reliability = "BestEffort"
+durability = "TransientLocal"
+history = "KeepLast"
+deadline = 100  # Deadline in milliseconds

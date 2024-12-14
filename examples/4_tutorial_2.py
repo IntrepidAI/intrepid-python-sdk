@@ -1,3 +1,13 @@
+"""
+Intrepid Python SDK example (Tutorial 2)
+
+- Node is declared via toml configuration file
+- Callback function is implemented with a closure, in order to
+  preserve a state (nonlocal counter)
+- Callback is registered as a regular function
+
+"""
+
 from intrepid_python_sdk import Intrepid, Qos, Node, IntrepidType, Type
 import math
 import pymap3d as pm

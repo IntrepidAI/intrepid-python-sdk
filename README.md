@@ -46,45 +46,46 @@ A Python SDK allows to
 
 Rendering a node means defining inputs and outputs complete with types (only primitive types supported).
 
-```Python
-from intrepid import Intrepid, Qos
+```python
+from intrepid_python_sdk import Intrepid, Qos, Node, Type, IntrepidType
+import time
 
 
 # Callback function to execute when inputs are ready
 def my_callback_function(in1: int, in2:int) -> (float, bool):
     # Add code here
-    time.sleep(0.2)
+    time.sleep(0.5)
     return 1. * (in1 + in2), True
 
 
-# Create QoS policy for function node
 # Create QoS policy for function node
 qos = Qos(reliability="BestEffort", durability="TransientLocal")
 qos.set_history("KeepLast")
 qos.set_deadline(100)  # Deadline expressed in milliseconds
 
 
-
 # Create my node
-mynode = Node("my_type")
+node_type = "node/sdk/2-node"
+mynode = Node(node_type)
 mynode.add_input("flow", IntrepidType(Type.FLOW))
 mynode.add_input("in1", IntrepidType(Type.INTEGER))
-mynode.add_input("in2", IntrepidType(Type.FLOAT))
-mynode.add_input("in3", IntrepidType(Type.VEC3, is_array=True))
+mynode.add_input("in2", IntrepidType(Type.INTEGER))
+mynode.add_output("flow", IntrepidType(Type.FLOW))
 mynode.add_output("out1", IntrepidType(Type.FLOAT))
+mynode.add_output("is_float", IntrepidType(Type.BOOLEAN))
 
 # Write to Graph
-node_handler = Intrepid(node_id="node_type/node_id")
-node_handler.register_node(mynode)
+service_handler = Intrepid()
+service_handler.register_node(mynode)
 
 # Attach Qos policy to this node
-node_handler.create_qos(qos)
+service_handler.create_qos(qos)
 
 # Register callback with node input. Callback and node inputs must have the same signature (same number/name/type)
-node_handler.register_callback(my_callback_function)
+service_handler.register_callback(lambda: my_callback_function)
 
 # Start server and node execution
-node_handler.start()
+service_handler.start()
 ```
 
 `node_id`, `input_id`, `output_id` are in the property section of the sidebar of the relative nodes.

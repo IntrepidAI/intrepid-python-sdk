@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 import logging
 from typing import Callable, Dict, List, Optional
+from collections.abc import Iterable
 import asyncio
 import importlib_metadata
 import os, sys
@@ -249,15 +250,13 @@ class Intrepid:
             log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_CALLBACK_REGISTERED)
             # is_valid = Intrepid.__get_instance().__register_callback(func, self.__node)
             is_valid = Intrepid.__Intrepid().__register_callback(func, self.__node)
-            # print("is_valid ", is_valid)
-            # if not is_valid:
-                # print("Register callback not valid. Aborting...")
-                # return
-            self.__original_callback = func
-            self.__callback = func
+            if is_valid:
+                self.__original_callback = func
+                self.__callback = func
+            else:
+                logger.error("Aborting...")
         else:
             if isinstance(self.__node, Node):
-                # TODO get node inputs here and pass to callback
                 self.__original_callback = func
                 return Intrepid.__get_instance().__register_callback(func, self.__node_info)
             else:
@@ -331,17 +330,18 @@ class Intrepid:
             self.configuration_manager = ConfigManager()
             self.device_context = {}
 
-        def __register_callback(self, func, node: Node):
-            print("Callback registered to node")
+        def __register_callback(self, func, node: Node) -> bool:
+            logger.info("Callback registered to node")
             # print("Node specs: ", node)
             is_valid = self.__validate_callback_parameters(node, func)
             # print("Callback is valid: ", is_valid)
             if is_valid:
-                print("Callback is valid. Proceeding...")
+                logger.info("Callback is valid. Proceeding...")
                 self.callback = func
+                return True
             else:
-                print("Callback input not valid. Aborting...")
-                return -1
+                logger.info("Callback input not valid. Aborting...")
+                return False
 
         # @param_types_validator(True, str, str, [_IntrepidConfig, None])
         def start(self, env_id, api_key, intrepid_config):
@@ -409,13 +409,14 @@ class Intrepid:
             callback_param_types = callback().__annotations__  # This is a dictionary of parameter names and types
             callback_return_values = []
             if 'return' in callback_param_types:
-                callback_return_values = callback_param_types['return']
+                callback_retval = callback_param_types['return']
+                if not isinstance(callback_retval, Iterable):
+                    callback_return_values.append(callback_retval)
+                else:
+                    callback_return_values = callback_retval
                 callback_param_types.pop('return', None)
 
             callback_params = list(callback_param_types.keys())
-            print("callback params: ", callback_params)
-            print("Callback parameter types:", callback_param_types)
-            print("Callback return values: ", callback_return_values)
 
             # Get input names and data types of the node
             node_input_names = [input_element.label for input_element in node.inputs]
@@ -426,25 +427,18 @@ class Intrepid:
             if 'flow' in node_output_names:
                 node_output_names.remove('flow')
 
-            # print("Node input names:", node_input_names)
-            # node_input_data_types = [input_element.type for input_element in node.inputs]
             node_input_data_types = []
             for input_element in node.inputs:
                 if input_element.type.is_flow():
                     continue
                 else:
                     node_input_data_types.append(input_element)
-                    # print(input_element)
-            # print("Node input types: ", node_input_data_types)
             node_output_data_types = []
             for output_element in node.outputs:
                 if output_element.type.is_flow():
                     continue
                 else:
                     node_output_data_types.append(output_element)
-
-
-
 
             # Check if the number of parameters match
             if len(callback_params) != len(node_input_names):
@@ -460,12 +454,12 @@ class Intrepid:
                     return False
 
                 if callback_param_types[input_name] != input_type.type.to_python_type():
-                    print("Unexpected input type. Expected ", input_type.type.to_python_type(), "Found ", callback_param_types[input_name])
+                    logger.error("Unexpected input type. Expected ", input_type.type.to_python_type(), "Found ", callback_param_types[input_name])
                     return False
 
             for retval, output_type in zip(callback_return_values, node_output_data_types):
                 if retval != output_type.type.to_python_type():
-                    print("Unexpected input type. Expected ", output_type.type.to_python_type(), "Found ", callback_param_types[input_name])
+                    logger.error("Unexpected input type. Expected ", output_type.type.to_python_type(), "Found ", callback_param_types[input_name])
                     return False
 
             return True
