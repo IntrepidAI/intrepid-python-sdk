@@ -6,6 +6,21 @@ import socket
 def my_callback_function():
 
     def closure(dest_host: str, dest_port: int, header: str, message: str) -> (int, str):
+        """
+        This closure handles sending a message to a specified host and port
+        using a TCP socket. It also waits for a response and returns the status
+        and response.
+
+        Args:
+            dest_host (str): The destination hostname or IP address.
+            dest_port (int): The destination port number.
+            header (str): A header string to prepend to the message.
+            message (str): The body of the message to be sent.
+
+        Returns:
+            status (int): A status code indicating success (200) or failure (500).
+            response (str): The server's response message or an error message.
+        """
 
         try:
             # Establish a TCP socket connection
