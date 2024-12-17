@@ -141,10 +141,12 @@ class IntrepidType:
             return int
         if self.base_type == Type.FLOAT:
             return float
-        if self.base_type in [Type.BIVEC2, Type.BIVEC3, Type.VEC2, Type.VEC3]:
+        if self.base_type in [Type.BIVEC2, Type.BIVEC3, Type.VEC2, Type.VEC3, Type.ARRAY]:
             return list
         if self.base_type == Type.BOOLEAN:
             return bool
+        if self.base_type == Type.STRING:
+            return str
         return any
 
 class DataElement:

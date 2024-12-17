@@ -1,0 +1,26 @@
+[node]
+type = "frag/node/sdk/network/send"
+
+[inputs]
+flow = "FLOW"
+dest_host = "STRING"
+dest_port = "INTEGER"
+header = "STRING"
+message = "STRING"
+
+
+[outputs]
+flow = "FLOW"
+status = "INTEGER"
+response = "STRING"
+
+
+[qos]
+reliability = "BestEffort"
+durability = "TransientLocal"
+history = "KeepLast"
+deadline = 100  # Deadline in milliseconds
+
+[server]
+host = "localhost"
+port = 9999
