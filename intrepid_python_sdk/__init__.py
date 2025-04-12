@@ -23,6 +23,7 @@ from intrepid_python_sdk.status import Status
 from intrepid_python_sdk.node import Node, Type, IntrepidType, DataElement
 from intrepid_python_sdk.qos import Qos
 from intrepid_python_sdk.message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
+from intrepid_python_sdk.simulator import Simulator
 from datetime import datetime
 
 
@@ -154,7 +155,6 @@ class Intrepid:
             #     logger.warning("WebSocket connection finalized unexpectedly.")
         return ws
 
-
     async def restart_node(self):
         """
         Restart the node by re-registering and resetting its state.
@@ -198,7 +198,6 @@ class Intrepid:
         await asyncio.sleep(1.0)  # Allow loop to settle
         # Close and clean up resources
         self.cleanup()
-
 
     def create_runner(self):
         app = web.Application()
