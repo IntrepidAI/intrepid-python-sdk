@@ -5,6 +5,8 @@ async def main():
     sim = Simulator()
     await sim.connect()
 
+    if sim is not None:
+        print(f"sim: {sim} is already connected!")
 
 
 if __name__ ==  '__main__':

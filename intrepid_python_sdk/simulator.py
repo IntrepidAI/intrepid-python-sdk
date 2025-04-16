@@ -18,34 +18,30 @@ class WorldEntity(Enum):
     TREE=1,
     BUILDING=2,
     BENCH=3,
+    VEHICLE=4,
+    GROUND=5,
 
 
 
 
-class Simulator:
-    def __init__(self, host="localhost", port=9120, step_duration=1_000_000):
+class SimClient:
+    def __init__(self, host="localhost", port=9120):
         # Instantiate sim client
         self.__host = host
         self.__port = port
-        self.__step_duration = step_duration  # simulation step in microseconds
+        # self.__step_duration = step_duration  # simulation step in microseconds
         self.__client = Client(f"ws://{self.__host}:{self.__port}/connection/websocket")
         logger.info(f"Connected to Intrepid Sim on {self.__host}:{self.__port}")
+        # asyncio.ensure_future(self.__client.connect())
+        self.__is_connected = False
+
+    async def connect(self):
+        await self.__client.connect()
+        self.__is_connected = True
 
     def client(self):
         return self.__client
 
-    def set_step_duration(self, duration: int):
-        self.__step_duration = duration
-
-    """
-    Connect to simulator websocket server
-    """
-    async def connect(self):
-        await self.__client.connect()
-
-    """
-    Reset simulator instance
-    """
     async def reset(self):
         await self.__client.rpc(f"session.restart", None)
 
@@ -55,43 +51,50 @@ class Simulator:
     async def stop(self):
         pass
 
-    """
-    Perform a simulation step for duration (microseconds)
-    """
-    async def step(self, duration):
-        pass
+    async def get_vehicles(self)-> list:
+        response = await self.__client.rpc('script.eval', {
+            "code": """
+                -- Return all vehicles with vehicle ids attached to them
+                function find_vehicles()
+                    local result = {}
+                    local found = sim.map.find_all({
+                        groups = { "vehicle" },
+                    })
+                    for idx = 1, #found do
+                        local vehicle_id = sim.object.get_robot_id(found[idx].entity)
+                        table.insert(result, {
+                            id = vehicle_id,
+                            entity = found[idx].entity,
+                        })
+                    end
+                    return result
+                end
 
-    """
-    Subscribe to simulator and receive
-    """
-    async def sync(self, control_func, *args, **kwargs):
-        self.__event_handler = Simulator.__EventHandler(control_func, *args, **kwargs)
-        print("setup event handler")
+                return find_vehicles()
+            """
+        })
 
-        sub = self.__client.new_subscription('sync', self.__event_handler)
-        print(f"sub: {sub}")
-        await sub.subscribe()
+        return response.data
 
 
-    async def get_vehicle(self, agent_id):
-        response = await self.__client.rpc('map.list_vehicles', None)
-        vehicles = response.data
-        vehicle = next((v for v in vehicles if vehicles[v]['robot_id'] == agent_id), None)
-        if not vehicle:
-            logger.error("No vehicle found. Are you sure agent_id exists?")
-            return None
-        return vehicle
+        # response = await self.__client.rpc('map.find_all',
+        #                                    {
+        #                                     "groups": ["vehicle"]
+        #                                     })
+        # vehicles = response.data
+        # return vehicles
 
-    """
-    Get vehicle infos: id, type, sensors, specs
-    """
-    async def get_vehicle_info(self, vehicle):
-        pass
+    async def get_objects(self):
+        all_objects = await self.__client.rpc('map.list_objects', None)
+        res = {}
+        for obj in all_objects.data:
+            obj_position = await self.__client.rpc(f"object_{obj}.position", None)
+            print(obj_position)
+            res["obj_id"] = obj_position
+        return res
 
-    """
-    Get vehicle position and velocity
-    """
     async def get_vehicle_state(self, vehicle) -> dict:
+
         state = await self.__client.rpc(f"object_{vehicle}.state", None)
         position = state.data["position"]
         rotation = state.data["rotation"]
@@ -102,33 +105,6 @@ class Simulator:
         res["velocity"] = velocity
         return res
 
-    async def get_objects(self):
-        all_objects = await self.__client.rpc('map.list_objects', None)
-        res = {}
-        # print(all_buildings)
-        for obj in all_objects.data:
-            obj_position = await self.__client.rpc(f"object_{obj}.position", None)
-            print(obj_position)
-            res["obj_id"] = obj_position
-        return res
-
-    """
-    Set goal at position
-    Position: [x, y, z] in local coordinates
-    """
-    async def set_goal(self, position: list):
-        goal = await self.__client.rpc(f"map.spawn_goal", {"position": {
-                                                "x": position[0],
-                                                "y": position[1],
-                                                "z": position[2]
-                                                }})
-        return goal
-
-    """
-    Spawn vehicle with id, position and rotation
-    Position: [x,y,z]
-    Rotation: [yz, zx, xy]
-    """
     async def spawn_vehicle(self, vehicle_id, position, rotation):
         vehicle = await self.__client.rpc(f"map.spawn_uav", {
                 "robot_id": vehicle_id,
@@ -159,21 +135,218 @@ class Simulator:
         else:
             return None
 
-    class __EventHandler(SubscriptionEventHandler):
-        def __init__(self, control_func, *args, **kwargs):
-            self.user_func = control_func
-            self.args = args
-            self.kwargs = kwargs
+    async def set_goal(self, position: list):
+        goal = await self.__client.rpc(f"map.spawn_goal", {"position": {
+                                                "x": position[0],
+                                                "y": position[1],
+                                                "z": position[2]
+                                                }})
+        return goal
 
-        async def on_publication(self, ctx: PublicationContext) -> None:
-            ts = ctx.pub.data
-            print(f"on_publication: ts {ts}")
-            args = list(self.args)
-            args.insert(1, ts)  # Assuming the user_func expects: client, ts, every_microsec
-            print(f"args: {args}")
-            # task = partial(self.user_func, *args, **self.kwargs)
-            # task = self.user_func(*self.args, **self.kwargs)
-            # Pass `ts` or other dynamic args by adding them here
-            # task = partial(self.user_func, ts=ts, *self.args, **self.kwargs)
-            # asyncio.ensure_future(task())
-            asyncio.ensure_future(self.user_func(*self.args, **self.kwargs))
+
+
+class Entity:
+    def __init__(self):
+        pass
+
+    async def position(self):
+        pass
+
+    async def rotation(self):
+        pass
+
+    async def velocity(self):
+        pass
+
+    async def set_position(self):
+        pass
+
+    async def set_rotation(self):
+        pass
+
+    async def despawn(self):
+        pass
+
+
+class Vehicle(Entity):
+    def __init__(self, client: SimClient, id: int, entity: str):
+        self._id = id
+        self._entity = entity
+        self._client = client
+        assert self._client.__is_connected == True
+
+    async def _state(self) -> dict:
+        state = await self.__client.rpc('script.eval', {
+            "code": """
+                position = sim.object.position(ARGS),
+                rotation = sim.object.rotation_angles(ARGS),
+                lin_vel = sim.object.linear_velocity(ARGS),
+                ang_vel = sim.object.angular_velocity(ARGS),
+                accel = sim.object.acceleration(ARGS),
+                state = {
+                    position=position,
+                    rotation=rotation,
+                    lin_vel=lin_vel,
+                    ang_vel=ang_vel,
+                    accel=accel
+                }
+
+                return state
+            """,
+            "args": self._id
+        })
+
+        return state.data
+
+
+    async def position(self):
+        state = await self._state()
+        return state.get("position", None)
+
+    async def rotation(self):
+        state = await self._state()
+        return state.get("rotation", None)
+
+    async def linear_velocity(self):
+        state = await self._state()
+        return state.get("lin_vel", None)
+
+    async def angular_velocity(self):
+        state = await self._state()
+        return state.get("ang_vel", None)
+
+    async def despawn(self):
+        pass
+        # Entity.despawn()
+
+
+class Simulator:
+    def __init__(self, host="localhost", port=9120, step_duration=1_000):
+        # Instantiate sim client
+        self.__sim_client = SimClient(host, port)
+        self._last_tick_received = -1
+        self._user_task = None
+        self._dt_ms = step_duration
+        self._sim_vehicles = {}  # { int: list }
+
+        class EventHandler(SubscriptionEventHandler):
+            async def on_publication(_, ctx: PublicationContext) -> None:
+                self._last_tick_received = ctx.pub.data
+                self._process_tick(ctx.pub.data)
+
+        sub = self.__sim_client.client().new_subscription('sync', EventHandler())
+        print(f"sub: {sub}")
+        asyncio.ensure_future(sub.subscribe())
+
+    async def connect(self):
+        await self.__sim_client.connect()
+
+    def client(self):
+        return self.__sim_client
+
+    def set_step_duration(self, duration: int):
+        self._dt_ms = duration
+
+    """
+    Connect to simulator websocket server
+    """
+    # async def connect(self):
+    #     await self.__client.connect()
+
+    """
+    Reset simulator instance
+    """
+    async def reset(self):
+        await self.__sim_client.reset()
+
+    async def pause(self):
+        pass
+
+    async def stop(self):
+        pass
+
+    """
+    Perform a simulation step for duration (microseconds)
+    """
+    async def step(self, duration):
+        pass
+
+    """
+    Subscribe to simulator and receive
+    """
+    def sync(self, control_func):
+        self.on_tick = control_func
+
+    async def get_vehicle(self, vehicle_id):
+        vehicle = await self.__sim_client.get_vehicles()
+        # [v for v in all_vehicles ]
+        return vehicle
+    """
+    Get vehicle infos: id, type, sensors, specs
+    """
+    async def get_vehicle_info(self, vehicle):
+        pass
+
+    """
+    Get vehicle position, velocity, rotation
+    """
+    async def get_vehicle_state(self, vehicle) -> dict:
+        res = await self.__sim_client.get_vehicle_state(vehicle)
+        return res
+
+    async def get_objects(self):
+        res = await self.__sim_client.get_objects()
+        return res
+
+    """
+    Set goal at position
+    Position: [x, y, z] in local coordinates
+    """
+    async def set_goal(self, position: list):
+        goal = await self.__sim_client.set_goal(position)
+        return goal
+
+    """
+    Spawn vehicle with id, position and rotation
+    Position: [x,y,z]
+    Rotation: [yz, zx, xy]
+    """
+    async def spawn_vehicle(self, vehicle_id, position, rotation):
+        vehicle = await self.__sim_client.spawn_vehicle(vehicle_id, position, rotation)
+        # vehicle = await self.__client.rpc(f"map.spawn_uav", {
+        #         "robot_id": vehicle_id,
+        #         "position": {"x": position[0], "y": position[1], "z": position[2]},
+        #         "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]}
+        #     })
+        # logger.info(f"Spawned vehicle {vehicle_id} at pos:{position} rot: {rotation}")
+        return vehicle
+
+    async def spawn_road(self, src, dest):
+        road_block = await self.__sim_client.spawn_road(src, dest)
+        return road_block
+
+    async def spawn_entity(self, entity_type: WorldEntity, position, rotation):
+        entity = await self.spawn_entity(entity_type, position, rotation)
+        return entity
+
+    async def on_tick(self, _tick):
+        # implemented by the user
+        pass
+
+    def _process_tick(self, tick):
+        if self._user_task and self._last_tick_received > 0:
+            return # busy
+
+        # send sync
+        next_tick = tick + self._dt_ms * 1_000
+        sync = self.__sim_client.client().get_subscription('sync')
+        asyncio.ensure_future(sync.publish(next_tick))
+
+        def on_task_done(_):
+            self._user_task = None
+            if self._last_tick_received >= next_tick:
+                self._process_tick(next_tick)
+
+        self._user_task = asyncio.ensure_future(self.on_tick(self.__sim_client.client()))
+        self._user_task.add_done_callback(on_task_done)
+

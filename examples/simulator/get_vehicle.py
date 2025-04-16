@@ -7,21 +7,24 @@ async def main():
     await sim.connect()
 
     # Get vehicle from agent_id
-    vehicle = await sim.get_vehicle(agent_id=1)
+    vehicle = await sim.get_vehicle(vehicle_id=1)
     print(f"vehicle: {vehicle}")
 
-    # Get non-existing vehicle
-    non_existing_vehicle = await sim.get_vehicle(agent_id=999)
-    print(f"non_existing_vehicle: {non_existing_vehicle}")
+    # # Get non-existing vehicle
+    # non_existing_vehicle = await sim.get_vehicle(agent_id=999)
+    # print(f"non_existing_vehicle: {non_existing_vehicle}")
 
-    # Get vehicle state
+    # # Get vehicle state
+    # TODO
+    # state = vehicle.get_state()
+
     state = await sim.get_vehicle_state(vehicle)
-    pos = state["position"]
-    rot = state["rotation"]
-    vel = state["velocity"]
-    print(f"pos: {pos}")
-    print(f"rot: {rot}")
-    print(f"vel: {vel}")
+    # pos = state["position"]
+    # rot = state["rotation"]
+    # vel = state["velocity"]
+    # print(f"pos: {pos}")
+    # print(f"rot: {rot}")
+    # print(f"vel: {vel}")
 
 
 
