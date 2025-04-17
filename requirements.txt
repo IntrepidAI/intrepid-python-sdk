@@ -30,6 +30,7 @@ pytest==8.3.4
     #   pytest-cov
 pytest-cov==4.1.0
     # via Intrepid (pyproject.toml)
+pytest-asyncio
 pyyaml==6.0.2
     # via responses
 requests==2.32.3

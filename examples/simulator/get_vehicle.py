@@ -1,5 +1,5 @@
 import asyncio
-from intrepid_python_sdk import Simulator
+from intrepid_python_sdk.simulator import Simulator
 
 
 async def main():
@@ -9,22 +9,26 @@ async def main():
     # Get vehicle from agent_id
     vehicle = await sim.get_vehicle(vehicle_id=1)
     print(f"vehicle: {vehicle}")
+    pos = await vehicle.position()
+    print(f"pos: {pos}")
 
-    # # Get non-existing vehicle
-    # non_existing_vehicle = await sim.get_vehicle(agent_id=999)
-    # print(f"non_existing_vehicle: {non_existing_vehicle}")
+    # Get partial state
+    rot = await vehicle.rotation()
+    print(f"rot: {rot}")
+    acc = await vehicle.acceleration()
+    print(f"acc: {acc}")
+    av = await vehicle.angular_velocity()
+    print(f"av: {av}")
+    lv = await vehicle.linear_velocity()
+    print(f"lv: {lv}")
 
-    # # Get vehicle state
-    # TODO
-    # state = vehicle.get_state()
+    # Get full state
+    full_state = await vehicle.state()
+    print(f"state: {full_state}")
 
-    state = await sim.get_vehicle_state(vehicle)
-    # pos = state["position"]
-    # rot = state["rotation"]
-    # vel = state["velocity"]
-    # print(f"pos: {pos}")
-    # print(f"rot: {rot}")
-    # print(f"vel: {vel}")
+    # Get non-existing vehicle
+    non_existing_vehicle = await sim.get_vehicle(vehicle_id=999)
+    print(f"non_existing_vehicle: {non_existing_vehicle}")
 
 
 

@@ -26,8 +26,6 @@ async def my_control_foo(client):
 async def main():
     sim = Simulator()
     await sim.connect()
-    # client = sim.client()
-    # print(f"client: {client}")
     sim.set_step_duration(500)
     sim.sync(my_control_foo)
 

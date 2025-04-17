@@ -5,8 +5,14 @@ from intrepid_python_sdk.simulator import Simulator
 async def main():
     sim = Simulator()
     await sim.connect()
-    goal = await sim.set_goal(position=[10,5,0])
-    print(f"goal entity: {goal}")
+
+    # Get all entities
+    entities = await sim.get_entities()
+    print(f"Found {len(entities)} entities")
+
+    # Get all vehicles
+    vehicles = await sim.get_vehicles()
+    print(f"Found {len(vehicles)} vehicles")
 
 
 

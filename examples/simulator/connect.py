@@ -1,5 +1,5 @@
 import asyncio
-from intrepid_python_sdk import Simulator
+from intrepid_python_sdk.simulator import Simulator
 
 async def main():
     sim = Simulator()
