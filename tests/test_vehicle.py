@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from intrepid_python_sdk.simulator import Simulator
 
