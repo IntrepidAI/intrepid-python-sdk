@@ -5,6 +5,7 @@ import logging
 import signal
 import sys
 import time
+import math
 from typing import List
 from enum import Enum
 
@@ -26,6 +27,12 @@ class WorldEntity(Enum):
     def to_string(self):
         return self.name.lower()
 
+    def __str__(self):
+            return self.to_string()
+
+    def __repr__(self):
+        return self.__str__()
+
 class ObstacleType(Enum):
     TREE1=1,
     TREE2=2,
@@ -38,6 +45,8 @@ class ObstacleType(Enum):
 
     def to_string(self):
         return self.name.lower()
+
+
 
 
 class SimClient:
@@ -71,10 +80,13 @@ class SimClient:
         await self.__client.rpc(f"session.restart", None)
 
     async def pause(self):
-        pass
+        await self.__client.rpc(f"session.pause", None)
 
     async def stop(self):
-        pass
+        await self.__client.rpc(f"session.exit", { "code": 0 })
+
+    async def speedup(self, speed_factor: float):
+        await self.__client.rpc(f"session.run", { "speed": speed_factor })
 
     async def get_vehicles(self):
         response = await self.__client.rpc('script.eval', {
@@ -146,7 +158,6 @@ class SimClient:
         logger.debug(f"Spawned vehicle (UGV) {vehicle_id} at pos:{position} rot: {rotation}")
         return vehicle_id, vehicle.data
 
-
     async def spawn_road(self, src, dest):
         try:
             await self.__client.rpc(f"map.spawn_road", {
@@ -156,13 +167,33 @@ class SimClient:
         except Exception as e:
             logger.error(f"[spawn_road] RPC call failed: {e}")
 
+    async def spawn_camera(self, position, rotation, size, parent):
+        pass
+        # camera = await self.__client.rpc(f"map.spawn_camera", {
+        #         "robot_id": vehicle_id,
+        #         "position": {"x": position[0], "y": position[1], "z": position[2]},
+        #         "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]}
+        #     })
+        # logger.debug(f"Spawned vehicle (UGV) {vehicle_id} at pos:{position} rot: {rotation}")
+        # return vehicle_id, vehicle.data
+
+        # let camera_rgb = await client.rpc('map.spawn_camera', {
+        #     position: { x: 0, y: 0, z: 0 },
+        #     rotation: { yz: 0, zx: 0, xy: 0 },
+        #     size: { w: 768, h: 576 },
+        #     parent: 'HAAAAAEAAAA=',
+        #     fov: Math.PI / 4,
+        #     format: 'image/png',
+        # })
+
+
     # TODO
     async def spawn_entity(self, entity_type: ObstacleType, position, rotation):
         if entity_type == ObstacleType.TREE1:
             tree = await self.__client.rpc(f"map.spawn", {
                 "mesh": "trees/tree_a.glb",
                 "position": {"x": position[0], "y": position[1]},
-                "rotation": {"yx": rotation[0], "zx": rotation[1], "xy": rotation[2]},
+                "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]},
                 })
             logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
             return tree.data
@@ -171,32 +202,33 @@ class SimClient:
             tree = await self.__client.rpc(f"map.spawn", {
                 "mesh": "trees/tree_b.glb",
                 "position": {"x": position[0], "y": position[1]},
-                "rotation": {"yx": rotation[0], "zx": rotation[1], "xy": rotation[2]},
+                "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]},
                 })
             logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
             return tree.data
+
 
 
         # TODO other entities
         else:
             return None
 
-    async def set_goal(self, position: list):
+    """
+    Return goal entity id
+    """
+    async def set_goal(self, position: list) -> str:
         goal = await self.__client.rpc(f"map.spawn_goal", {"position": {
                                                 "x": position[0],
                                                 "y": position[1],
                                                 "z": position[2]
                                                 }})
-        return goal
-
-
+        return goal.data
 
 
 
 class Entity:
     def __init__(self, client: SimClient, entity: str, group: str):
         assert client.is_connected() == True, "Client is not connected."
-
         self._entity = entity
         self._group = group
         self._client = client
@@ -211,6 +243,8 @@ class Entity:
             self._entity_type = WorldEntity.VEHICLE
         elif group == "goal":
             self._entity_type = WorldEntity.GOAL
+        elif group == "sensor":
+            self._entity_type = WorldEntity.SENSOR
 
     def __repr__(self):
         return f"<Entity entity='{self._entity}' group={self._group}>"
@@ -218,13 +252,15 @@ class Entity:
     async def _state(self) -> dict:
         state = await self._client.client().rpc('script.eval', {
             "code": """
-                position = sim.object.position(ARGS)
+                local_position = sim.object.position(ARGS)
+                global_position = sim.object.gps_position(ARGS)
                 rotation = sim.object.rotation_angles(ARGS)
                 lin_vel = sim.object.linear_velocity(ARGS)
                 ang_vel = sim.object.angular_velocity(ARGS)
                 accel = sim.object.acceleration(ARGS)
                 state = {
-                    position=position,
+                    global_position=global_position,
+                    local_position=local_position,
                     rotation=rotation,
                     lin_vel=lin_vel,
                     ang_vel=ang_vel,
@@ -243,9 +279,13 @@ class Entity:
     async def state(self):
         return await self._state()
 
-    async def position(self):
+    async def local_position(self):
         state = await self._state()
-        return state.get("position", None)
+        return state.get("local_position", None)
+
+    async def global_position(self):
+        state = await self._state()
+        return state.get("global_position", None)
 
     async def rotation(self):
         state = await self._state()
@@ -279,8 +319,110 @@ class Entity:
         except:
             print(f"Error despawning entity {self._entity}")
 
+    async def spawn_camera(self, position, rotation, size, fov_degrees=80.0, format="image/tiff", camera_type="rgb") -> "Camera":
+        # from intrepid_python_sdk.simulator import Camera
+
+        depth_camera = camera_type == "rgbd"
+        camera = await self._client.client().rpc("map.spawn_camera", {
+            "position": {"x": position[0], "y": position[1], "z": position[2] },
+            "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2] },
+            "size": {"w": size[0], "h": size[1]},
+            "parent": self._entity,
+            "fov": fov_degrees * math.pi / 180,
+            "format": format,
+            "depth_camera": depth_camera
+        })
+        return Camera(self._client, camera.data)
+
+    def spawn_abstract_sensor(self, radius: 1.0, groups=None) -> "AbstractSensor":
+        return AbstractSensor(self._client, radius, groups)
 
 
+class AbstractSensor:
+    def __init__(self, client: SimClient, radius, groups):
+        self._client = client
+        self._groups = groups
+        self._radius = radius
+        self._data = None
+
+    def __repr__(self):
+        return f"<AbstractSensor groups={self._groups} radius={self._radius}>"
+
+    def groups(self):
+        return self._groups
+
+    def radius(self):
+        return self._radius
+
+    def set_data(self, data):
+        self._data = data
+
+    async def capture(self) -> List[Entity]:
+        surrounding = await self._client.client().rpc("map.intersection_with_sphere", {
+                    "center": {"x": 0, "y": 0, "z": 0.0 },
+                    "radius": self._radius,
+                    "groups": self._groups
+        })
+        # sensor = AbstractSensor(self._client, self._radius, groups)
+        self._data = surrounding.data
+        return [Entity(self._client, e["entity"], e["group"]) for e in self._data]
+
+
+"""
+Secondary sensors class (eg. lidar, camera, depth/termal camera, ultrasonic, IR, etc.)
+"""
+class Sensor(Entity):
+    def __init__(self, client: SimClient, entity: str):
+        assert client.is_connected() == True, "Cannot instantiate Sensor. Client is not connected"
+        super().__init__(client, entity, WorldEntity.SENSOR.to_string())
+
+    def __repr__(self):
+        return f"<Sensor id={self._id}, entity='{self._entity}'>"
+
+    def id(self):
+        return self._id
+
+    def entity(self):
+        return self._entity
+
+    async def state(self):
+        return await super().state()
+
+    async def position(self):
+        logger.info(f"[Sensor] Getting position for entity {self._entity}")
+        return await super().position()
+
+    async def rotation(self):
+        logger.info(f"[Sensor] Getting rotation for entity {self._entity}")
+        return await super().rotation()
+
+    async def set_position(self, x, y, z):
+        return await super().set_position(x, y, z)
+
+    async def set_rotation(self, yz, zx, xy):
+        return await super().set_rotation(yz, zx, xy)
+
+class Camera(Sensor):
+    def __init__(self, client: SimClient, entity: str):
+        super().__init__(client, entity)
+        self._resolution_x = 640
+        self._resolution_y = 480
+
+    def __repr__(self):
+        return f"<Camera entity='{self._entity}', resolution={self._resolution_x}x{self._resolution_y}>"
+
+    def resolution(self):
+        return self._resolution_x, self._resolution_y
+
+    async def capture(self):
+        image = await self._client.client().rpc(f"object_{self._entity}.request_image", None)
+        return image.data
+
+    async def set_position(self, x, y, z):
+        return await super().set_position(x, y, z)
+
+    async def set_rotation(self, yz, zx, xy):
+        return await super().set_rotation(yz, zx, xy)
 
 class Vehicle(Entity):
     def __init__(self, client: SimClient, id: int, entity: str):
@@ -301,9 +443,16 @@ class Vehicle(Entity):
     async def state(self):
         return await super().state()
 
-    async def position(self):
-        logger.info(f"[Vehicle] Getting position for entity {self._entity}")
-        return await super().position()
+    """
+    Get local/global position of vehicle
+    """
+    async def local_position(self):
+        logger.info(f"[Vehicle] Getting local position for entity {self._entity}")
+        return await super().local_position()
+
+    async def global_position(self):
+            logger.info(f"[Vehicle] Getting global position for entity {self._entity}")
+            return await super().global_position()
 
     async def rotation(self):
         logger.info(f"[Vehicle] Getting position for entity {self._entity}")
@@ -320,16 +469,6 @@ class Vehicle(Entity):
     async def acceleration(self):
         state = await self._state()
         return state.get("accel", None)
-
-class Sensor(Entity):
-    def __init__(self, client: SimClient, id: int, entity: str):
-        assert client.is_connected() == True, "Cannot instantiate Sensor. Client is not connected"
-
-        super().__init__(client, entity, WorldEntity.SENSOR.to_string())
-        self._id = id
-
-    # like vehicle
-    pass
 
 class Simulator:
     def __init__(self, host="localhost", port=9120, step_duration=1_000):
@@ -373,11 +512,21 @@ class Simulator:
     async def reset(self):
         await self.__sim_client.reset()
 
+    """
+    Pause simulator instance
+    """
     async def pause(self):
-        pass
+        await self.__sim_client.pause()
 
+    """
+    Stop simulator instance
+    """
     async def stop(self):
-        pass
+        await self.__sim_client.stop()
+
+    async def speedup(self, speed_factor: float):
+        assert speed_factor > 0, "Speed factor must be greater than 0"
+        await self.__sim_client.speedup(speed_factor)
 
     """
     Perform a simulation step for duration (microseconds)
@@ -391,30 +540,23 @@ class Simulator:
     def sync(self, control_func):
         self.on_tick = control_func
 
+    """
+    Get all vehicles in simulation instance
+    """
     async def get_vehicles(self) -> List[Vehicle]:
         vehicles = await self.__sim_client.get_vehicles()
         return [ Vehicle(self.client(), v_id, v_entity) for (v_id, v_entity) in vehicles ]
 
+    """
+    Get single vehicle
+    """
     async def get_vehicle(self, vehicle_id: int) -> Vehicle:
         vehicles = await self.get_vehicles()
-        # print(vehicles)
         for v in vehicles:
             if v.id() == vehicle_id:
                 return v
         return None
 
-    """
-    Get vehicle infos: id, type, sensors, specs
-    """
-    # async def get_vehicle_info(self, vehicle):
-    #     pass
-
-    """
-    Get vehicle position, velocity, rotation
-    """
-    # async def get_vehicle_state(self, vehicle) -> dict:
-    #     res = await self.__sim_client.get_vehicle_state(vehicle)
-    #     return res
 
     async def get_entities(self):
         entities = await self.__sim_client.get_entities()
@@ -426,7 +568,7 @@ class Simulator:
     """
     async def set_goal(self, position: list):
         goal = await self.__sim_client.set_goal(position)
-        return goal
+        return Entity(self.client(), goal, "goal")
 
     """
     Spawn UAV vehicle with id, position and rotation
@@ -447,15 +589,29 @@ class Simulator:
         return Vehicle(self.__sim_client, vehicle_id, vehicle_entity)
 
     async def spawn_road(self, src, dest):
-        road_block = await self.__sim_client.spawn_road(src, dest)
-        return road_block
+        await self.__sim_client.spawn_road(src, dest)
 
     async def spawn_entity(self, entity_type: ObstacleType, position, rotation):
         entity = await self.__sim_client.spawn_entity(entity_type, position, rotation)
         return Entity(self.__sim_client, entity[0], entity_type.to_string())
 
+    async def spawn_camera(self, position, rotation, size, fov_degrees=80.0, format="image/tiff", camera_type="rgb"):
+        depth_camera = camera_type == "rgbd"
+        camera = await self._client.client().rpc("map.spawn_camera", {
+            "position": {"x": position[0], "y": position[1], "z": position[2] },
+            "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2] },
+            "size": {"w": size[0], "h": size[1]},
+            "parent": None,
+            "fov": fov_degrees * math.pi / 180,
+            "format": format,
+            "depth_camera": depth_camera
+        })
+        return Camera(self._client.client(), camera.data)
+
+    """
+    Callback to be implemented by user within sim sync context
+    """
     async def on_tick(self, _tick):
-        # implemented by the user
         pass
 
     def _process_tick(self, tick):

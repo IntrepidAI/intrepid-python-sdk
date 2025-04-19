@@ -1,3 +1,12 @@
+"""
+./single_robot_behavior --agent_id 1 ...
+./single_robot_behavior --agent_id 2 ...
+./single_robot_behavior --agent_id 3 ...
+./single_robot_behavior --agent_id 4 ...
+./single_robot_behavior --agent_id 5 ...
+
+"""
+
 import asyncio
 from intrepid_python_sdk.simulator import Simulator, WorldEntity
 import math
@@ -26,7 +35,8 @@ async def my_control_foo(client):
 async def main():
     sim = Simulator()
     await sim.connect()
-    sim.set_step_duration(500)
+
+    sim.set_step_duration(100)
     sim.sync(my_control_foo)
 
 

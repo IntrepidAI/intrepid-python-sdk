@@ -24,6 +24,10 @@ async def test_get_vehicle():
         tree = await sim.spawn_entity(ObstacleType.TREE1, position=[src_x, 7, 0], rotation=[0,0,0])
         assert tree is not None
 
+        await sim.speedup(2.6)
+        await sim.pause()
+        await sim.stop()
+
     await sim.disconnect()
 
 
