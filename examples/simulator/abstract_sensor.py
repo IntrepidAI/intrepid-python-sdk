@@ -12,12 +12,12 @@ async def main():
     # Attach abstract sensor to vehicle
     sensor = vehicle.spawn_abstract_sensor(radius=5.0)
 
-    # Capture surrounding obstacles
+    # Capture surrounding entities
     detected_entities = await sensor.capture()
     for de in detected_entities:
         position = await de.local_position()
         rotation = await de.rotation()
-        print(f"Found obstacle type: '{de.entity_type()}' at pos: {position} rot: {rotation}")
+        print(f"Found entity type: '{de.entity_type()}' at pos: {position} rot: {rotation}")
 
 
 if __name__ ==  '__main__':
