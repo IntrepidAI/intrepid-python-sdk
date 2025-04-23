@@ -1,6 +1,8 @@
 import asyncio
 from centrifuge import Client, SubscriptionEventHandler, PublicationContext
-import numpy as np
+# import numpy as np
+import scipy as sp
+
 import logging
 import signal
 import sys
@@ -16,8 +18,17 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class IntrepidEnum(Enum):
+    def to_string(self):
+        return self.name.lower()
 
-class WorldEntity(Enum):
+    def __str__(self):
+            return self.to_string()
+
+    def __repr__(self):
+        return self.__str__()
+
+class WorldEntity(IntrepidEnum):
     OBSTACLE=1,
     VEHICLE=2,
     GOAL=3,
@@ -33,7 +44,7 @@ class WorldEntity(Enum):
     def __repr__(self):
         return self.__str__()
 
-class ObstacleType(Enum):
+class ObstacleType(IntrepidEnum):
     TREE1=1,
     TREE2=2,
     BUILDING1=3,
@@ -43,11 +54,83 @@ class ObstacleType(Enum):
     BENCH1=7,
     BENCH2=8,
 
-    def to_string(self):
-        return self.name.lower()
+    # def to_string(self):
+    #     return self.name.lower()
 
+class Color(IntrepidEnum):
+    RED=1,
+    GREEN=2,
+    BLUE=3,
+    BLACK=4,
 
+class Vec3:
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        self.x = x
+        self.y = y
+        self.z = z
 
+    def __add__(self, other):
+        return Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
+
+    def __sub__(self, other):
+        return Vec3(self.x - other.x, self.y - other.y, self.z - other.z)
+
+    def __mul__(self, scalar):
+        return Vec3(self.x * scalar, self.y * scalar, self.z * scalar)
+
+    def __truediv__(self, scalar):
+        return Vec3(self.x / scalar, self.y / scalar, self.z / scalar)
+
+    def dot(self, other):
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
+    def cross(self, other):
+        return Vec3(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x
+        )
+
+    def length(self):
+        return math.sqrt(self.dot(self))
+
+    def normalize(self):
+        l = self.length()
+        return self / l if l != 0 else Vec3()
+
+    def to_dict(self):
+        return {"x": self.x, "y": self.y, "z": self.z}
+
+    def __repr__(self):
+        return f"Vec3({self.x}, {self.y}, {self.z})"
+
+class Position(Vec3):
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        super().__init__(x, y, z)
+
+class Rotation:
+    def __init__(self, roll=0.0, pitch=0.0, yaw=0.0):  # Could represent Euler angles
+        self.yz = roll
+        self.zx = pitch
+        self.xy = yaw
+
+    def to_dict(self):
+        return {"yz": self.yz, "zx": self.zx, "xy": self.xy}
+
+class Velocity(Vec3):
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        super().__init__(x, y, z)
+
+    def __repr__(self):
+        return f"Velocity({self.x}, {self.y}, {self.z})"
+
+    @classmethod
+    def from_dict(data: dict):
+        return Velocity(data.get("x", 0.0), data.get("y", 0.0), data.get("z", 0.0))
+
+class Acceleration(Vec3):
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        super().__init__(x, y, z)
 
 class SimClient:
     def __init__(self, host="localhost", port=9120):
@@ -140,20 +223,21 @@ class SimClient:
         res["velocity"] = velocity
         return res
 
-    async def spawn_uav(self, vehicle_id, position, rotation):
+    async def spawn_uav(self, vehicle_id:int, position: Position, rotation: Rotation):
+
         vehicle = await self.__client.rpc(f"map.spawn_uav", {
                 "robot_id": vehicle_id,
-                "position": {"x": position[0], "y": position[1], "z": position[2]},
-                "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]}
+                "position": position.to_dict(),
+                "rotation": rotation.to_dict()
             })
         logger.debug(f"Spawned vehicle (UAV) {vehicle_id} at pos:{position} rot: {rotation}")
         return vehicle_id, vehicle.data
 
-    async def spawn_ugv(self, vehicle_id, position, rotation):
+    async def spawn_ugv(self, vehicle_id: int, position: Position, rotation: Rotation):
         vehicle = await self.__client.rpc(f"map.spawn_ugv", {
                 "robot_id": vehicle_id,
-                "position": {"x": position[0], "y": position[1], "z": position[2]},
-                "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]}
+                "position": position.to_dict(),
+                "rotation": rotation.to_dict()
             })
         logger.debug(f"Spawned vehicle (UGV) {vehicle_id} at pos:{position} rot: {rotation}")
         return vehicle_id, vehicle.data
@@ -188,12 +272,12 @@ class SimClient:
 
 
     # TODO
-    async def spawn_entity(self, entity_type: ObstacleType, position, rotation):
+    async def spawn_entity(self, entity_type: ObstacleType, position: Position, rotation: Rotation):
         if entity_type == ObstacleType.TREE1:
             tree = await self.__client.rpc(f"map.spawn", {
                 "mesh": "trees/tree_a.glb",
-                "position": {"x": position[0], "y": position[1]},
-                "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]},
+                "position": position.to_dict(),
+                "rotation": rotation.to_dict(),
                 })
             logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
             return tree.data
@@ -201,12 +285,29 @@ class SimClient:
         elif entity_type == ObstacleType.TREE2:
             tree = await self.__client.rpc(f"map.spawn", {
                 "mesh": "trees/tree_b.glb",
-                "position": {"x": position[0], "y": position[1]},
-                "rotation": {"yz": rotation[0], "zx": rotation[1], "xy": rotation[2]},
+                "position": position.to_dict(),
+                "rotation": rotation.to_dict(),
                 })
             logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
             return tree.data
 
+        elif entity_type == ObstacleType.BUILDING1:
+            tree = await self.__client.rpc(f"map.spawn", {
+                "mesh": "buildings/building1.glb",
+                "position": position.to_dict(),
+                "rotation": rotation.to_dict(),
+                })
+            logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
+            return tree.data
+
+        elif entity_type == ObstacleType.BUILDING2:
+            tree = await self.__client.rpc(f"map.spawn", {
+                "mesh": "buildings/building2.glb",
+                "position": position.to_dict(),
+                "rotation": rotation.to_dict(),
+                })
+            logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
+            return tree.data
 
 
         # TODO other entities
@@ -216,15 +317,9 @@ class SimClient:
     """
     Return goal entity id
     """
-    async def set_goal(self, position: list) -> str:
-        goal = await self.__client.rpc(f"map.spawn_goal", {"position": {
-                                                "x": position[0],
-                                                "y": position[1],
-                                                "z": position[2]
-                                                }})
+    async def set_goal(self, position: Position) -> str:
+        goal = await self.__client.rpc(f"map.spawn_goal", {"position": position.to_dict()})
         return goal.data
-
-
 
 class Entity:
     def __init__(self, client: SimClient, entity: str, group: str):
@@ -272,6 +367,9 @@ class Entity:
         })
 
         return state.data
+
+    def entity(self):
+        return self._entity
 
     def entity_type(self) -> WorldEntity:
         return self._entity_type
@@ -334,16 +432,16 @@ class Entity:
         })
         return Camera(self._client, camera.data)
 
-    def spawn_abstract_sensor(self, radius: 1.0, groups=None) -> "AbstractSensor":
-        return AbstractSensor(self._client, radius, groups)
-
+    def spawn_abstract_sensor(self, radius: float = 1.0, groups: List[str] = []) -> "AbstractSensor":
+        return AbstractSensor(self._client, radius, groups, parent=self.entity())
 
 class AbstractSensor:
-    def __init__(self, client: SimClient, radius, groups):
+    def __init__(self, client: SimClient, radius: float, groups: List[str], parent=None):
         self._client = client
         self._groups = groups
         self._radius = radius
         self._data = None
+        self._entity = parent
 
     def __repr__(self):
         return f"<AbstractSensor groups={self._groups} radius={self._radius}>"
@@ -357,19 +455,59 @@ class AbstractSensor:
     def set_data(self, data):
         self._data = data
 
-    async def capture(self) -> List[Entity]:
-        surrounding = await self._client.client().rpc("map.intersection_with_sphere", {
-                    "center": {"x": 0, "y": 0, "z": 0.0 },
-                    "radius": self._radius,
-                    "groups": self._groups
+    async def capture(
+        self,
+        position: bool = False,
+        rotation: bool = False,
+        bbox: bool = False,
+        bsphere: bool = False,
+    ) -> List[Entity]:
+        result = await self._client.client().rpc("script.eval", {
+            "code": f"""
+                local found = sim.map.intersection_with_sphere({{
+                    center = {{ x = 0, y = 0, z = 0 }},
+                    radius = ARGS.radius,
+                    groups = ARGS.groups,
+                    anchor = ARGS.anchor,
+                    exclude = {{ ARGS.anchor }},
+                }})
+                local result = {{}}
+
+                for idx = 1, #found do
+                    local entity = found[idx].entity
+                    local group = found[idx].group
+                    {position and "local position = sim.object.position(entity)" or ""}
+                    {rotation and "local rotation = sim.object.rotation_angles(entity)" or ""}
+                    {bbox and "local bbox = sim.object.compute_aabb(entity)" or ""}
+                    {bsphere and "local bsphere = sim.object.compute_bounding_sphere(entity)" or ""}
+
+                    table.insert(result, {{
+                        entity = entity,
+                        group = group,
+                        {position and "position = position," or ""}
+                        {rotation and "rotation = rotation," or ""}
+                        {bbox and "bbox = bbox," or ""}
+                        {bsphere and "bsphere = bsphere," or ""}
+                    }})
+                end
+
+                return result
+            """,
+            "args": { "radius": self._radius, "groups": self._groups, "anchor": self._entity }
         })
-        # sensor = AbstractSensor(self._client, self._radius, groups)
-        self._data = surrounding.data
-        return [Entity(self._client, e["entity"], e["group"]) for e in self._data]
+
+        res = {}
+        for e in result.data:
+            res[e.get("entity")] = {}
+            res[e.get("entity")]["position"] = e.get("position", None)
+            res[e.get("entity")]["rotation"] = e.get("rotation", None)
+            res[e.get("entity")]["bbox"] = e.get("bbox", None)
+            res[e.get("entity")]["bsphere"] = e.get("bsphere", None)
+        return res
 
 
 """
-Secondary sensors class (eg. lidar, camera, depth/termal camera, ultrasonic, IR, etc.)
+Secondary sensors class (eg. lidar, camera, depth/thermal camera, ultrasonic, IR, etc.)
 """
 class Sensor(Entity):
     def __init__(self, client: SimClient, entity: str):
@@ -470,6 +608,27 @@ class Vehicle(Entity):
         state = await self._state()
         return state.get("accel", None)
 
+    # TODO set motors and maximum thrust
+    async def set_motors(self, num_motors: int, max_thrust: List[float]):
+        pass
+
+    # TODO set vehicle mass
+    async def set_mass(self, mass: float):
+        pass
+
+    async def velocity_control(self, altitude: float, velocity: Velocity):
+        print(self._entity)
+        await self._client.client().rpc(f"object_{self._entity}.velocity_control", {
+            "z": altitude,
+            "vxy": 0.0,  # yaw rate
+            "vx": velocity.x,
+            "vy": velocity.y,
+        })
+
+    async def set_rotation(self, rotation: Rotation):
+        pass
+
+
 class Simulator:
     def __init__(self, host="localhost", port=9120, step_duration=1_000):
         # Instantiate sim client
@@ -478,6 +637,10 @@ class Simulator:
         self._user_task = None
         self._dt_ms = step_duration
         self._sim_vehicles = {}  # { int: list }
+
+        # sim info
+        self._num_vehicles = 0
+        self._num_entities = 0
 
         class EventHandler(SubscriptionEventHandler):
             async def on_publication(_, ctx: PublicationContext) -> None:
@@ -557,6 +720,12 @@ class Simulator:
                 return v
         return None
 
+    def num_vehicles(self):
+        return self._num_vehicles
+
+    def num_entities(self):
+        return len(self.get_entities())
+        # return self._num_entities
 
     async def get_entities(self):
         entities = await self.__sim_client.get_entities()
@@ -566,7 +735,7 @@ class Simulator:
     Set goal at position
     Position: [x, y, z] in local coordinates
     """
-    async def set_goal(self, position: list):
+    async def set_goal(self, position: Position, color="red"):
         goal = await self.__sim_client.set_goal(position)
         return Entity(self.client(), goal, "goal")
 
@@ -577,6 +746,7 @@ class Simulator:
     """
     async def spawn_uav(self, vehicle_id, position, rotation):
         (vehicle_id, vehicle_entity) = await self.__sim_client.spawn_uav(vehicle_id, position, rotation)
+        self._num_vehicles += 1
         return Vehicle(self.__sim_client, vehicle_id, vehicle_entity)
 
     """
@@ -586,13 +756,15 @@ class Simulator:
     """
     async def spawn_ugv(self, vehicle_id, position, rotation):
         (vehicle_id, vehicle_entity) = await self.__sim_client.spawn_ugv(vehicle_id, position, rotation)
+        self._num_vehicles += 1
         return Vehicle(self.__sim_client, vehicle_id, vehicle_entity)
 
     async def spawn_road(self, src, dest):
         await self.__sim_client.spawn_road(src, dest)
 
-    async def spawn_entity(self, entity_type: ObstacleType, position, rotation):
+    async def spawn_entity(self, entity_type: ObstacleType, position: Position, rotation: Rotation):
         entity = await self.__sim_client.spawn_entity(entity_type, position, rotation)
+        self._num_entities += 1
         return Entity(self.__sim_client, entity[0], entity_type.to_string())
 
     async def spawn_camera(self, position, rotation, size, fov_degrees=80.0, format="image/tiff", camera_type="rgb"):
@@ -628,6 +800,7 @@ class Simulator:
             if self._last_tick_received >= next_tick:
                 self._process_tick(next_tick)
 
-        self._user_task = asyncio.ensure_future(self.on_tick(self.__sim_client.client()))
+        # Pass simulator class to on_tick (user can call sim.method() for their needs)
+        self._user_task = asyncio.ensure_future(self.on_tick(self))
         self._user_task.add_done_callback(on_task_done)
 

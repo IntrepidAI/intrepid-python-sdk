@@ -1,1 +1,4 @@
-from .simulator import SimClient, Simulator, Entity, WorldEntity, ObstacleType, Sensor, Camera, AbstractSensor
+from .simulator import SimClient, Simulator, Entity, \
+    WorldEntity, ObstacleType, \
+    Vehicle, Sensor, Camera, AbstractSensor, \
+    Position, Rotation, Velocity, Acceleration

@@ -1,5 +1,6 @@
 import asyncio
 from intrepid_python_sdk.simulator import Simulator
+import json
 
 
 async def main():
@@ -9,22 +10,25 @@ async def main():
     # Get vehicle from agent_id
     vehicle = await sim.get_vehicle(vehicle_id=1)
     print(f"vehicle: {vehicle}")
-    pos = await vehicle.position()
-    print(f"pos: {pos}")
+    pos = await vehicle.local_position()
+    print(f"position: {json.dumps(pos, indent=4)}")
 
     # Get partial state
     rot = await vehicle.rotation()
-    print(f"rot: {rot}")
+    print(f"rotation: {json.dumps(rot, indent=4)}")
+
     acc = await vehicle.acceleration()
-    print(f"acc: {acc}")
+    print(f"acceleration: {json.dumps(acc, indent=4)}")
+
     av = await vehicle.angular_velocity()
-    print(f"av: {av}")
+    print(f"acceleration: {json.dumps(av, indent=4)}")
+
     lv = await vehicle.linear_velocity()
-    print(f"lv: {lv}")
+    print(f"lv: {json.dumps(lv, indent=4)}")
 
     # Get full state
     full_state = await vehicle.state()
-    print(f"state: {full_state}")
+    print(f"full_state: {json.dumps(full_state, indent=4)}")
 
     # Get non-existing vehicle
     non_existing_vehicle = await sim.get_vehicle(vehicle_id=999)

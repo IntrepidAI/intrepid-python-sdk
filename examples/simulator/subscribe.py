@@ -8,25 +8,15 @@
 """
 
 import asyncio
-from intrepid_python_sdk.simulator import Simulator, WorldEntity
-import math
+from functools import partial
+from intrepid_python_sdk.simulator import Simulator, WorldEntity, Position, Rotation
+# import math
 
-
-async def my_control_foo(client):
+async def my_control_foo(robot_id, sim: Simulator):
     # Add your code HERE
 
-    robot_id = 42
-    angle = (2 * math.pi)
-
-    entity = await client.rpc('map.spawn_uav', {
-        'robot_id': robot_id,
-        'position': {
-            'x': 1. * math.cos(angle),
-            'y': 1. * math.sin(angle),
-            'z': 0,
-        },
-    })
-    print(entity)
+    vehicle = await sim.spawn_uav(robot_id, Position(0,0,0), Rotation(0,0,0))
+    print(vehicle)
 
     # end of your code
 
@@ -37,7 +27,8 @@ async def main():
     await sim.connect()
 
     sim.set_step_duration(100)
-    sim.sync(my_control_foo)
+    sim.sync(partial(my_control_foo, 42))
+
 
 
 
