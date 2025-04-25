@@ -1,5 +1,5 @@
 import asyncio
-from intrepid_python_sdk.simulator import Simulator, ObstacleType
+from intrepid_python_sdk.simulator import Simulator, ObstacleType, Position, Rotation
 
 
 async def main():
@@ -11,14 +11,20 @@ async def main():
         dst_x = src_x + 10
 
         # Spawn UGV
-        ugv_vehicle = await sim.spawn_ugv(vehicle_id=i, position=[i+3, 1, 0], rotation=[0,0,0])
+        position = Position(i+3, 1, 0)
+        rotation = Rotation(0,0,0)
+        ugv_vehicle = await sim.spawn_ugv(i, position, rotation)
         print(ugv_vehicle)
 
         # Spawn road segment
-        await sim.spawn_road(src=[src_x,5], dest=[dst_x,5])
+        position_src = Position(src_x, 5, 0)
+        position_dst = Position(dst_x, 5, 0)
+        await sim.spawn_road(position_src, position_dst)
 
         # Spawn generic entity
-        tree = await sim.spawn_entity(ObstacleType.TREE1, position=[src_x, 7, 0], rotation=[0,0,0])
+        position = Position(src_x, 7, 0)
+        rotation = Rotation(0,0,0)
+        tree = await sim.spawn_entity(ObstacleType.TREE1, position, rotation)
         print(tree)
 
 

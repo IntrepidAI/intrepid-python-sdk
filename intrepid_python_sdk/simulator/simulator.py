@@ -242,11 +242,11 @@ class SimClient:
         logger.debug(f"Spawned vehicle (UGV) {vehicle_id} at pos:{position} rot: {rotation}")
         return vehicle_id, vehicle.data
 
-    async def spawn_road(self, src, dest):
+    async def spawn_road(self, src: Position, dest: Position):
         try:
             await self.__client.rpc(f"map.spawn_road", {
-                    "src": {"x": src[0], "y": src[1]},
-                    "dst": {"x": dest[0], "y": dest[1]},
+                    "src": {"x": src.x, "y": src.y},
+                    "dst": {"x": dest.x, "y": dest.y},
                 })
         except Exception as e:
             logger.error(f"[spawn_road] RPC call failed: {e}")
@@ -759,7 +759,7 @@ class Simulator:
         self._num_vehicles += 1
         return Vehicle(self.__sim_client, vehicle_id, vehicle_entity)
 
-    async def spawn_road(self, src, dest):
+    async def spawn_road(self, src: Position, dest: Position):
         await self.__sim_client.spawn_road(src, dest)
 
     async def spawn_entity(self, entity_type: ObstacleType, position: Position, rotation: Rotation):
