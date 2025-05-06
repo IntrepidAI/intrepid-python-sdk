@@ -8,27 +8,27 @@ async def main():
     await sim.connect()
 
     # Get vehicle from agent_id
-    vehicle = await sim.get_vehicle(vehicle_id=1)
+    vehicle = await sim.get_vehicle(vehicle_id=0)
     print(f"vehicle: {vehicle}")
     pos = await vehicle.local_position()
-    print(f"position: {json.dumps(pos, indent=4)}")
+    print(f"position: {pos}")
 
     # Get partial state
     rot = await vehicle.rotation()
-    print(f"rotation: {json.dumps(rot, indent=4)}")
+    print(f"rotation: {rot}")
 
     acc = await vehicle.acceleration()
-    print(f"acceleration: {json.dumps(acc, indent=4)}")
+    print(f"acceleration: {acc}")
 
     av = await vehicle.angular_velocity()
-    print(f"acceleration: {json.dumps(av, indent=4)}")
+    print(f"angular_velocity: {av}")
 
     lv = await vehicle.linear_velocity()
-    print(f"lv: {json.dumps(lv, indent=4)}")
+    print(f"lv: {lv}")
 
     # Get full state
     full_state = await vehicle.state()
-    print(f"full_state: {json.dumps(full_state, indent=4)}")
+    print(f"full_state: {full_state}")
 
     # Get non-existing vehicle
     non_existing_vehicle = await sim.get_vehicle(vehicle_id=999)

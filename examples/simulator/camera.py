@@ -3,6 +3,14 @@ from intrepid_python_sdk.simulator import Simulator, Camera, AbstractSensor
 import base64
 import numpy as np
 import cv2
+import time
+from base64 import b64decode
+
+
+
+# with open("image.png", "wb") as f:
+#     f.write(data)
+
 
 class MySensor:
     pass
@@ -24,12 +32,28 @@ async def main():
 
     camera = await vehicle.spawn_camera(position=[0,0,0],
                                         rotation=[0,0,0],
-                                        size=[1024, 768],
+                                        size=[320, 240],
                                         fov_degrees=120)
-    imgbuf = await camera.capture()
-    img = base64_cv2(imgbuf)
-    cv2.imshow(img)
+    _ = await camera.capture()
 
+    for i in range(30):
+        imgbuf = await camera.capture()
+        header, encoded = imgbuf.split("base64,", 1)
+        data = b64decode(encoded)
+        with open(f"image{i}.png", "wb") as f:
+            f.write(data)
+
+        im = cv2.imread(f"image{i}.png", cv2.IMREAD_UNCHANGED)
+        cv2.imshow("Camera Footage", im)
+        time.sleep(0.1)
+
+    # im = cv2.imread("image20.png", cv2.IMREAD_UNCHANGED)
+    # cv2.imshow("Camera Footage", im)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    # img = base64_cv2(imgbuf)
+    # cv2.imshow(img)
 
     # print(sensor.capture())
 

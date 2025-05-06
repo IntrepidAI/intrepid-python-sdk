@@ -1,5 +1,5 @@
 import asyncio
-from intrepid_python_sdk.simulator import Simulator
+from intrepid_python_sdk.simulator import Simulator, Entity
 
 
 async def main():
@@ -10,14 +10,16 @@ async def main():
     vehicle = await sim.get_vehicle(vehicle_id=1)
 
     # Attach abstract sensor to vehicle
-    sensor = vehicle.spawn_abstract_sensor(radius=5.0)
+    sensor = vehicle.spawn_abstract_sensor(radius=50.0,
+                                           groups=["obstacle"])
 
     # Capture surrounding entities
     detected_entities = await sensor.capture()
     for de in detected_entities:
-        position = await de.local_position()
-        rotation = await de.rotation()
-        print(f"Found entity type: '{de.entity_type()}' at pos: {position} rot: {rotation}")
+        position = detected_entities[de]["position"]
+        rotation = detected_entities[de]["rotation"]
+        group = detected_entities[de]["group"]
+        print(f"Found entity type: '{group}' at pos: {position} rot: {rotation}")
 
 
 if __name__ ==  '__main__':

@@ -27,7 +27,7 @@ async def main():
     await sim.connect()
 
     sim.set_step_duration(100)
-    sim.sync(partial(my_control_foo, 42))
+    sim.sync(partial(my_control_foo, 1))
 
 
 
