@@ -2,7 +2,7 @@
 name = "intrepid-python-sdk"
 version = "0.1.11"
 description = "Intrepid Python SDK"
-authors = ["frag <francesco@intrepid.ai>"]
+authors = ["Intrepid AI <hello@intrepid.ai>"]
 license = "Apache License Version 2.0"
 readme = "README.md"
 
