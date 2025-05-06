@@ -1,11 +1,12 @@
 import asyncio
-from intrepid_python_sdk import Simulator
+from intrepid_python_sdk.simulator import Simulator, Position
 
 
 async def main():
     sim = Simulator()
     await sim.connect()
-    goal = await sim.set_goal(position=[10,5,0])
+    goal_pos = Position(10,8,0)
+    goal = await sim.set_goal(goal_pos)
     print(f"goal entity: {goal}")
 
 
