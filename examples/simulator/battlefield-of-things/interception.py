@@ -7,7 +7,13 @@ from pseudo_glam.vec3 import Vec3
 from pseudo_glam.quat import Quat
 
 TIMESTEP_MS = 100
-SHIELD_RADIUS = 3
+SHIELD_RADIUS = 10
+TERMINAL_PHASE_THR = 3
+NUM_DEFENDERS = 4
+NUM_ATTACKERS = 1
+DEFENDER_SPREAD = 5
+
+ATTACKER_ID = 99
 
 class WorldControllerBase:
     def __init__(self):
@@ -68,21 +74,31 @@ class WorldController(WorldControllerBase):
 
         commands = []
 
-        attacker = AttackerVehicleController(99)
+        attacker = AttackerVehicleController(ATTACKER_ID)
         self._robots.append(attacker)
         await attacker.spawn(self)
 
-        hvt_entity = await self.rpc('map.spawn_goal', {
-            'position': Vec3(0, 0, 10).to_dict(),
+        # hvt_entity = await self.rpc('map.spawn_goal', {
+        #     'position': Vec3(0, 0, 10).to_dict(),
+        # })
+
+        hvt_entity = await self.rpc('map.spawn_gltf', {
+            'mesh': 'https://ams1.vultrobjects.com/assets-sim/assets_v1/military/96L6.glb',
+            'position': Vec3(20, 0, 0).to_dict(),
+            'rotation': {'xy': 0.1234}
         })
+
 
         await self.create_defender(attacker.entity, hvt_entity, 0, 0)
 
-        for i in range(6):
-            await self.create_defender(attacker.entity, hvt_entity, 1.5, i * 2 * math.pi / 6)
+        for i in range(NUM_DEFENDERS):
+            await self.create_defender(attacker.entity,
+                                       hvt_entity,
+                                       DEFENDER_SPREAD,
+                                       i * 2 * math.pi / NUM_DEFENDERS)
 
-        for i in range(18):
-            await self.create_defender(attacker.entity, hvt_entity, 3, i * 2 * math.pi / 18)
+        # for i in range(18):
+        #     await self.create_defender(attacker.entity, hvt_entity, 3, i * 2 * math.pi / 18)
 
         commands.append(self.rpc('session.run'))
         await asyncio.gather(*commands)
@@ -127,7 +143,7 @@ class AttackerVehicleController:
         self.entity = await world.rpc('map.spawn_drone', {
             'model': 'f450_pid',
             'robot_id': self.robot_id,
-            'position': Vec3(-10, 0, 0).to_dict(),
+            'position': Vec3(-20, 0, 0).to_dict(),
         })
 
     async def despawn(self, world):
@@ -219,22 +235,37 @@ class DefenderVehicleController:
             attacker_position = Vec3.from_dict(attacker_position)
             attacker_direction_from_hvt = Quat.from_rotation_arc(Vec3.X, (hvt_position - attacker_position).normalize_or_zero())
 
+            # if (hvt_position - attacker_position).length() < SHIELD_RADIUS + TERMINAL_PHASE_THR:
+            #     intercept_position = attacker_position
+            # else:
+            #     # intercept_position = hvt_position - (hvt_position - attacker_position).normalize() * SHIELD_RADIUS
+            #     intercept_position = hvt_position.copy()
+            #     intercept_position -= attacker_direction_from_hvt * Vec3(SHIELD_RADIUS, 0, 0)
+            #     intercept_position += attacker_direction_from_hvt * Vec3(
+            #         0.,
+            #         self.formation_distance * math.cos(self.formation_angle),
+            #         self.formation_distance * math.sin(self.formation_angle),
+            #     )
+
             if (hvt_position - attacker_position).length() < SHIELD_RADIUS:
                 intercept_position = attacker_position
             else:
                 # intercept_position = hvt_position - (hvt_position - attacker_position).normalize() * SHIELD_RADIUS
                 intercept_position = hvt_position.copy()
                 intercept_position -= attacker_direction_from_hvt * Vec3(SHIELD_RADIUS, 0, 0)
+                intercept_position.z = max(intercept_position.z, 4)
                 intercept_position += attacker_direction_from_hvt * Vec3(
                     0.,
                     self.formation_distance * math.cos(self.formation_angle),
                     self.formation_distance * math.sin(self.formation_angle),
                 )
+                intercept_position.z = max(intercept_position.z, 0.5)
+
 
             commands = [
                 self.remove_gizmos(world),
-                # self.draw_line(world, attacker_position, hvt_position, '#ff0000'),
-                # self.draw_line(world, position, intercept_position, '#00ff00'),
+                self.draw_line(world, attacker_position, hvt_position, '#ff0000'),
+                self.draw_line(world, position, intercept_position, '#00ff00'),
                 world.rpc(f'object_{self.entity}.position_control', {
                     'x': intercept_position.x,
                     'y': intercept_position.y,
