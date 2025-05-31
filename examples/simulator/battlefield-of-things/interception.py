@@ -85,7 +85,7 @@ class WorldController(WorldControllerBase):
         hvt_entity = await self.rpc('map.spawn_gltf', {
             'mesh': 'https://ams1.vultrobjects.com/assets-sim/assets_v1/military/96L6.glb',
             'position': Vec3(20, 0, 0).to_dict(),
-            'rotation': {'xy': 0.1234}
+            'rotation': {'xy': math.pi / 6},
         })
 
 
@@ -225,15 +225,16 @@ class DefenderVehicleController:
             return
 
         try:
-            [position, hvt_position, attacker_position] = await asyncio.gather(
+            [position, hvt_position, attacker_position, attacker_velocity] = await asyncio.gather(
                 world.rpc(f'object_{self.entity}.position'),
                 world.rpc(f'object_{self.hvt_entity}.position'),
                 world.rpc(f'object_{self.attacker_entity}.position'),
+                world.rpc(f'object_{self.attacker_entity}.linear_velocity'),
             )
             position = Vec3.from_dict(position)
             hvt_position = Vec3.from_dict(hvt_position)
             attacker_position = Vec3.from_dict(attacker_position)
-            attacker_direction_from_hvt = Quat.from_rotation_arc(Vec3.X, (hvt_position - attacker_position).normalize_or_zero())
+            attacker_velocity = Vec3.from_dict(attacker_velocity)
 
             # if (hvt_position - attacker_position).length() < SHIELD_RADIUS + TERMINAL_PHASE_THR:
             #     intercept_position = attacker_position
@@ -247,8 +248,11 @@ class DefenderVehicleController:
             #         self.formation_distance * math.sin(self.formation_angle),
             #     )
 
-            if (hvt_position - attacker_position).length() < SHIELD_RADIUS:
-                intercept_position = attacker_position
+            future_attacker_position = attacker_position + attacker_velocity * (TIMESTEP_MS / 1000.0) * 2
+            attacker_direction_from_hvt = Quat.from_rotation_arc(Vec3.X, (hvt_position - future_attacker_position).normalize_or_zero())
+
+            if (hvt_position - future_attacker_position).length() < SHIELD_RADIUS + TERMINAL_PHASE_THR:
+                intercept_position = future_attacker_position
             else:
                 # intercept_position = hvt_position - (hvt_position - attacker_position).normalize() * SHIELD_RADIUS
                 intercept_position = hvt_position.copy()
@@ -264,7 +268,8 @@ class DefenderVehicleController:
 
             commands = [
                 self.remove_gizmos(world),
-                self.draw_line(world, attacker_position, hvt_position, '#ff0000'),
+                self.draw_line(world, attacker_position, future_attacker_position, '#ff0000'),
+                self.draw_line(world, future_attacker_position, hvt_position, '#ff0000'),
                 self.draw_line(world, position, intercept_position, '#00ff00'),
                 world.rpc(f'object_{self.entity}.position_control', {
                     'x': intercept_position.x,
