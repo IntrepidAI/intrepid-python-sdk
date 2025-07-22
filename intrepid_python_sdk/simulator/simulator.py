@@ -1,7 +1,7 @@
 import asyncio
 from centrifuge import Client, SubscriptionEventHandler, PublicationContext
 # import numpy as np
-import scipy as sp
+# import scipy as sp
 
 import logging
 import signal
@@ -14,6 +14,8 @@ from enum import Enum
 from functools import partial
 import logging
 
+
+from intrepid_python_sdk.pseudo_glam.vec3 import Vec3
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,6 +55,7 @@ class ObstacleType(IntrepidEnum):
     BUILDING4=6,
     BENCH1=7,
     BENCH2=8,
+    HVT1=9,
 
     # def to_string(self):
     #     return self.name.lower()
@@ -63,55 +66,62 @@ class Color(IntrepidEnum):
     BLUE=3,
     BLACK=4,
 
-class Vec3:
-    def __init__(self, x=0.0, y=0.0, z=0.0):
-        self.x = x
-        self.y = y
-        self.z = z
 
-    def __add__(self, other):
-        return Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
 
-    def __sub__(self, other):
-        return Vec3(self.x - other.x, self.y - other.y, self.z - other.z)
-
-    def __mul__(self, scalar):
-        return Vec3(self.x * scalar, self.y * scalar, self.z * scalar)
-
-    def __truediv__(self, scalar):
-        return Vec3(self.x / scalar, self.y / scalar, self.z / scalar)
-
-    def dot(self, other):
-        return self.x * other.x + self.y * other.y + self.z * other.z
-
-    def cross(self, other):
-        return Vec3(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x
-        )
-
-    def length(self):
-        return math.sqrt(self.dot(self))
-
-    def normalize(self):
-        l = self.length()
-        return self / l if l != 0 else Vec3()
-
-    def to_dict(self):
-        return {"x": self.x, "y": self.y, "z": self.z}
-
-    def __repr__(self):
-        return f"Vec3({self.x}, {self.y}, {self.z})"
+# class Vec3:
+#     def __init__(self, x=0.0, y=0.0, z=0.0):
+#         self.x = x
+#         self.y = y
+#         self.z = z
+#
+#     def __add__(self, other):
+#         return Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
+#
+#     def __sub__(self, other):
+#         return Vec3(self.x - other.x, self.y - other.y, self.z - other.z)
+#
+#     def __mul__(self, scalar):
+#         return Vec3(self.x * scalar, self.y * scalar, self.z * scalar)
+#
+#     def __truediv__(self, scalar):
+#         return Vec3(self.x / scalar, self.y / scalar, self.z / scalar)
+#
+#     def dot(self, other):
+#         return self.x * other.x + self.y * other.y + self.z * other.z
+#
+#     def cross(self, other):
+#         return Vec3(
+#             self.y * other.z - self.z * other.y,
+#             self.z * other.x - self.x * other.z,
+#             self.x * other.y - self.y * other.x
+#         )
+#
+#     def length(self):
+#         return math.sqrt(self.dot(self))
+#
+#     def normalize(self):
+#         l = self.length()
+#         return self / l if l != 0 else Vec3()
+#
+#     def to_dict(self):
+#         return {"x": self.x, "y": self.y, "z": self.z}
+#
+#     def __repr__(self):
+#         return f"Vec3({self.x}, {self.y}, {self.z})"
 
 class Position(Vec3):
     def __init__(self, x=0.0, y=0.0, z=0.0):
         super().__init__(x, y, z)
 
-    def distance(self, target: "Position") -> float:
-        return ((self.x - target.x) ** 2 +
-                (self.y - target.y) ** 2 +
-                (self.z - target.z) ** 2) ** 0.5
+    def to_vec(self) -> Vec3:
+        return Vec3(self.x, self.y, self.z)
+
+    # def distance(self, target: "Position") -> float:
+    #     return distance(target)
+
+        # return ((self.x - target.x) ** 2 +
+        #         (self.y - target.y) ** 2 +
+        #         (self.z - target.z) ** 2) ** 0.5
 
 class Rotation:
     def __init__(self, roll=0.0, pitch=0.0, yaw=0.0):  # Could represent Euler angles
@@ -129,9 +139,13 @@ class Velocity(Vec3):
     def __repr__(self):
         return f"Velocity({self.x}, {self.y}, {self.z})"
 
+    # @classmethod
+    # def from_dict(data: dict):
+    #     return Velocity(data.get("x", 0.0), data.get("y", 0.0), data.get("z", 0.0))
     @classmethod
-    def from_dict(data: dict):
-        return Velocity(data.get("x", 0.0), data.get("y", 0.0), data.get("z", 0.0))
+    def from_dict(cls, data: dict) -> 'Velocity':
+        """Create Velocity from dict with 'x', 'y', 'z' keys."""
+        return cls(data.get('x', 0.0), data.get('y', 0.0), data.get('z', 0.0))
 
 class Acceleration(Vec3):
     def __init__(self, x=0.0, y=0.0, z=0.0):
@@ -219,9 +233,9 @@ class SimClient:
         res["velocity"] = velocity
         return res
 
-    async def spawn_uav(self, vehicle_id:int, position: Position, rotation: Rotation):
-
-        vehicle = await self.__client.rpc(f"map.spawn_uav", {
+    async def spawn_vehicle(self, vehicle_id:int, position: Position, rotation: Rotation, vehicle_model: str = "crazyflie"):
+        vehicle = await self.__client.rpc(f"map.spawn_drone", {
+                'model': vehicle_model,
                 "robot_id": vehicle_id,
                 "position": position.to_dict(),
                 "rotation": rotation.to_dict()
@@ -229,14 +243,15 @@ class SimClient:
         logger.debug(f"Spawned vehicle (UAV) {vehicle_id} at pos:{position} rot: {rotation}")
         return vehicle_id, vehicle.data
 
-    async def spawn_ugv(self, vehicle_id: int, position: Position, rotation: Rotation):
-        vehicle = await self.__client.rpc(f"map.spawn_ugv", {
-                "robot_id": vehicle_id,
-                "position": position.to_dict(),
-                "rotation": rotation.to_dict()
-            })
-        logger.debug(f"Spawned vehicle (UGV) {vehicle_id} at pos:{position} rot: {rotation}")
-        return vehicle_id, vehicle.data
+    # async def spawn_ugv(self, vehicle_id: int, position: Position, rotation: Rotation, vehicle_model: str = "ugv"):
+    #     vehicle = await self.__client.rpc(f"map.spawn_drone", {
+    #             'model': vehicle_model,
+    #             "robot_id": vehicle_id,
+    #             "position": position.to_dict(),
+    #             "rotation": rotation.to_dict()
+    #         })
+    #     logger.debug(f"Spawned vehicle (UGV) {vehicle_id} at pos:{position} rot: {rotation}")
+    #     return vehicle_id, vehicle.data
 
     async def spawn_road(self, src: Position, dest: Position):
         try:
@@ -305,6 +320,14 @@ class SimClient:
             logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
             return tree.data
 
+        elif entity_type == ObstacleType.HVT1:
+            tree = await self.__client.rpc(f"map.spawn", {
+                'mesh': 'https://ams1.vultrobjects.com/assets-sim/assets_v1/military/96L6.glb',
+                "position": position.to_dict(),
+                "rotation": rotation.to_dict(),
+                })
+            logger.debug(f"Spawned tree block {tree} at pos: {position} rot: {rotation}")
+            return tree.data
 
         # TODO other entities
         else:
@@ -612,11 +635,11 @@ class Vehicle(Entity):
     """
     Get local/global position of vehicle
     """
-    async def local_position(self):
+    async def local_position(self) -> Position:
         logger.info(f"[Vehicle] Getting local position for entity {self._entity}")
         return await super().local_position()
 
-    async def global_position(self):
+    async def global_position(self) -> Position:
             logger.info(f"[Vehicle] Getting global position for entity {self._entity}")
             return await super().global_position()
 
@@ -624,9 +647,10 @@ class Vehicle(Entity):
         logger.info(f"[Vehicle] Getting position for entity {self._entity}")
         return await super().rotation()
 
-    async def linear_velocity(self):
+    async def linear_velocity(self) -> Velocity:
         state = await self._state()
-        return state.get("lin_vel", None)
+        data = state.get("lin_vel", None)
+        return Velocity(data.get('x', 0), data.get('y', 0), data.get('z', 0))
 
     async def angular_velocity(self):
         state = await self._state()
@@ -778,8 +802,8 @@ class Simulator:
     Position: [x,y,z]
     Rotation: [yz, zx, xy]
     """
-    async def spawn_uav(self, vehicle_id, position, rotation):
-        (vehicle_id, vehicle_entity) = await self.__sim_client.spawn_uav(vehicle_id, position, rotation)
+    async def spawn_vehicle(self, vehicle_id, position, rotation, vehicle_model: str):
+        (vehicle_id, vehicle_entity) = await self.__sim_client.spawn_vehicle(vehicle_id, position, rotation, vehicle_model)
         self._num_vehicles += 1
         return Vehicle(self.__sim_client, vehicle_id, vehicle_entity)
 
@@ -788,10 +812,10 @@ class Simulator:
     Position: [x,y,z]
     Rotation: [yz, zx, xy]
     """
-    async def spawn_ugv(self, vehicle_id, position, rotation):
-        (vehicle_id, vehicle_entity) = await self.__sim_client.spawn_ugv(vehicle_id, position, rotation)
-        self._num_vehicles += 1
-        return Vehicle(self.__sim_client, vehicle_id, vehicle_entity)
+    # async def spawn_ugv(self, vehicle_id, position, rotation):
+    #     (vehicle_id, vehicle_entity) = await self.__sim_client.spawn_ugv(vehicle_id, position, rotation)
+    #     self._num_vehicles += 1
+    #     return Vehicle(self.__sim_client, vehicle_id, vehicle_entity)
 
     async def spawn_road(self, src: Position, dest: Position):
         await self.__sim_client.spawn_road(src, dest)
@@ -799,7 +823,7 @@ class Simulator:
     async def spawn_entity(self, entity_type: ObstacleType, position: Position, rotation: Rotation):
         entity = await self.__sim_client.spawn_entity(entity_type, position, rotation)
         self._num_entities += 1
-        return Entity(self.__sim_client, entity[0], entity_type.to_string())
+        return Entity(self.__sim_client, entity, entity_type.to_string())
 
     async def spawn_camera(self, position, rotation, size, fov_degrees=80.0, format="image/tiff", camera_type="rgb"):
         depth_camera = camera_type == "rgbd"

@@ -24,12 +24,16 @@ from intrepid_python_sdk.status import Status
 from intrepid_python_sdk.node import Node, Type, IntrepidType, DataElement
 from intrepid_python_sdk.qos import Qos
 from intrepid_python_sdk.message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
+from intrepid_python_sdk.pseudo_glam.vec3 import Vec3
+from intrepid_python_sdk.pseudo_glam.quat import Quat
 
 # from intrepid_python_sdk.simulator import Simulator
 # from intrepid_python_sdk.entity import Entity, WorldEntity
 # from intrepid_python_sdk.vehicle import Vehicle
 # from intrepid_python_sdk.sim_client import SimClient
 # from simulator.simulator import Simulator
+
+
 
 import aiohttp
 from aiohttp import web, WSCloseCode

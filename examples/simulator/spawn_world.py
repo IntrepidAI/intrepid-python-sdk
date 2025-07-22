@@ -1,3 +1,5 @@
+# cargo run --release
+
 import asyncio
 from intrepid_python_sdk.simulator import Simulator, ObstacleType, Position, Rotation
 import random

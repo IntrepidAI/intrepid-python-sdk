@@ -8,7 +8,7 @@ async def main():
     await sim.connect()
 
     # Get vehicle from agent_id
-    vehicle = await sim.get_vehicle(vehicle_id=0)
+    vehicle = await sim.get_vehicle(vehicle_id=1)
     print(f"vehicle: {vehicle}")
     pos = await vehicle.local_position()
     print(f"position: {pos}")

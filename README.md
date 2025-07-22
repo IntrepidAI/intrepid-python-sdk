@@ -20,7 +20,7 @@ poetry install
 And check that all has been installed correctly
 
 ```
-python examples/ex0.py
+python examples/1_hello_world.py
 ```
 
 This should print
