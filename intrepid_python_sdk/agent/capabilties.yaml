@@ -1,0 +1,21 @@
+ip: "localhost"
+port: 1111
+robot_id: intrepid-robot-01
+human_readable_name: "PX4 SITL Test Drone"
+capabilities:
+  navigation:
+    - MoveTo:
+        server_name: "localhost:1111"
+        endpoint: "move_to"
+        params: List[Float]
+    - OrbitAround:
+        server_name: "localhost:1111/orbit_around"
+  perception:
+    - PersonDetection
+  control:
+    - Takeoff
+    - Land
+protocols:
+  - ros2
+  - mavsdk
+version: "0.1"

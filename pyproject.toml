@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "intrepid-python-sdk"
-version = "0.1.11"
+version = "0.1.12"
 description = "Intrepid Python SDK"
 authors = ["Intrepid AI <hello@intrepid.ai>"]
 license = "Apache License Version 2.0"
@@ -31,7 +31,7 @@ build-backend = "poetry.core.masonry.api"
 pythonpath = ["flagship", "tests"]
 
 [tool.bumpver]
-current_version = "0.1.0"
+current_version = "0.1.1"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message  = "Bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"

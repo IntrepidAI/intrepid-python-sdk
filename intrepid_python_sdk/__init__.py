@@ -35,6 +35,7 @@ import aiohttp
 from aiohttp import web, WSCloseCode
 import asyncio
 import json
+from typing import Callable, Dict, Any
 
 
 __name__ = 'intrepid_python_sdk'
@@ -58,6 +59,9 @@ log_format = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(format=log_format)
 logger = logging.getLogger(__name__)  # Create a logger instance
 
+# Registries (module-level for MVP)
+ACTION_REGISTRY: Dict[str, Callable] = {}
+SENSOR_REGISTRY: Dict[str, Callable] = {}
 
 
 class Intrepid:
@@ -79,6 +83,12 @@ class Intrepid:
         self.__node = None
         self.__node_info = None
         self.__callback = None
+        self.__adapters = None
+        # websocket server extended by decorated functions (endpoints)
+        self.__app = None
+
+        self.__runner = self.create_runner()
+
 
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
@@ -159,6 +169,27 @@ class Intrepid:
             #     logger.warning("WebSocket connection finalized unexpectedly.")
         return ws
 
+    # Decorators for adapter authors
+    def action(self, name: str):
+        """Register an action handler for name"""
+        def decorator(fn: Callable):
+            ACTION_REGISTRY[name] = fn
+            self.__app.add_routes([
+                web.get(f"/{name}", self.websocket_handler),
+            ])
+            return fn
+        return decorator
+
+    def sensor(self, name: str):
+        """Register a sensor handler (pushes world updates)"""
+        def decorator(fn: Callable):
+            SENSOR_REGISTRY[name] = fn
+            self.__app.add_routes([
+                web.get(f"/{name}", self.websocket_handler),
+            ])
+            return fn
+        return decorator
+
     async def restart_node(self):
         """
         Restart the node by re-registering and resetting its state.
@@ -204,22 +235,21 @@ class Intrepid:
         self.cleanup()
 
     def create_runner(self):
-        app = web.Application()
-        app.add_routes([
-            # web.get('/',   self.http_handler),
+        self.__app = web.Application()
+        self.__app.add_routes([
             web.get('/', self.websocket_handler),
         ])
-        return web.AppRunner(app)
+        return web.AppRunner(self.__app)
 
-    async def start_server(self, host=WS_HOST, port=WS_PORT):
-        runner = self.create_runner()
+    async def start_server(self, host, port):
+        # runner = self.create_runner()
         print("\nListening on host {}:{}".format(host, port))
-        await runner.setup()
-        site = web.TCPSite(runner, host, port)
+        await self.__runner.setup()
+        site = web.TCPSite(self.__runner, host, port)
         await site.start()
 
-    def start(self):
-        if self.__callback is None:
+    def start(self, host=WS_HOST, port=WS_PORT):
+        if self.__callback is None and not ACTION_REGISTRY and not SENSOR_REGISTRY:
             log(TAG_HTTP_REQUEST, LogLevel.ERROR, ERROR_REGISTER_CALLBACK)
             sys.exit(1)
         # # Define the Unix domain socket path
@@ -231,8 +261,11 @@ class Intrepid:
         # self.__unix_socket_path = unix_socket_path
         # asyncio.run(wsserver(self.__unix_socket_path))
 
+        for route in self.__app.router.routes():
+            print(route)
+
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.start_server())
+        loop.run_until_complete(self.start_server(host, port))
         loop.run_forever()
 
     @staticmethod
@@ -332,6 +365,9 @@ class Intrepid:
             self.status = Status.NOT_INITIALIZED
             self.configuration_manager = ConfigManager()
             self.device_context = {}
+
+        def __register_adapter(self, action_name, adapter) -> bool:
+            return True
 
         def __register_callback(self, func, node: Node) -> bool:
             logger.info("Callback registered to node")
