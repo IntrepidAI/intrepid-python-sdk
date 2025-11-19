@@ -1,0 +1,20 @@
+project = "https://labs.intrepid.ai/projects/34/C8aPEiy63yiGUsv53MkZTHof"
+rust_log = "intrepid_agent=debug"
+plugins = [
+    "ws://127.0.0.1:11111",
+    "ws://127.0.0.1:22222"
+]
+
+[dashboard]
+host = "0.0.0.0"
+port = 9180
+
+[mavlink]
+messages = "./mavlink_builtin_messages.zip"
+
+[ros2]
+messages = "./ros2_builtin_messages.zip"
+
+[px4]
+src_addr = "0.0.0.0:30881"
+px4_addr = "127.0.0.1:18570"

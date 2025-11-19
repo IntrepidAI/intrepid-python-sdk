@@ -83,10 +83,8 @@ class Intrepid:
         self.__node = None
         self.__node_info = None
         self.__callback = None
-        self.__adapters = None
         # websocket server extended by decorated functions (endpoints)
         self.__app = None
-
         self.__runner = self.create_runner()
 
 
@@ -278,13 +276,22 @@ class Intrepid:
 
     def register_node(self, node: Node):
         print("Registering node")
-        print(node)
+        # print(node)
         self.__node = node
+        registered = Intrepid.__Intrepid().__register_node(node)
+        print(registered)
+        if registered:
+            self.action(node.name)
+            # print("HELLO HELLO", res)
+            print("ACTION_REGISTRY: ", ACTION_REGISTRY)
+
+    def register_action(self, action_name: str, func):
+        return Intrepid.__Intrepid().__register_action(action_name, func)
 
     def register_callback(self, func):
         if self.__callback is None:
             log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_CALLBACK_REGISTERED)
-            # is_valid = Intrepid.__get_instance().__register_callback(func, self.__node)
+
             is_valid = Intrepid.__Intrepid().__register_callback(func, self.__node)
             if is_valid:
                 self.__original_callback = func
@@ -351,22 +358,58 @@ class Intrepid:
             Intrepid.__instance = Intrepid.__Intrepid()  # Create the inner class instance
         return Intrepid.__instance
 
-
     @staticmethod
     def _update_status(new_status):
         Intrepid.__get_instance().update_status(new_status)
 
     class __Intrepid:
-
         def __init__(self):
             self.qos = None
             # Node input/output types and names
             self.node_specs = None
+            self.__nodes: Dict[str, Node] = {}
+            # self.__mapped_callbacks: Dict[str, bool] = {}
             self.status = Status.NOT_INITIALIZED
             self.configuration_manager = ConfigManager()
             self.device_context = {}
 
+        def __register_node(self, node: Node):
+            logger.info("Registering node")
+            # runtime can have multiple nodes
+            if node.name not in self.__nodes:
+                self.__nodes[node.name] = node
+                return True
+            else:
+                logger.info("Node already registered under the same name ", node.name)
+                return False
+
         def __register_adapter(self, action_name, adapter) -> bool:
+            return True
+
+        def __register_action(self, action_name: str, func) -> bool:
+            if action_name in ACTION_REGISTRY:
+                logger.info("Action already registered...returning")
+                return False
+
+            # this action_name is for a node
+            if action_name in self.__nodes:
+                # Get node with same action name
+                node = self.__nodes[action_name]
+                is_valid = self.__validate_callback_parameters(node, func)
+                print("Callback is valid: ", is_valid)
+                if is_valid:
+                    logger.info("Callback is valid. Proceeding...")
+                    # self.callback = func
+                    ACTION_REGISTRY[action_name] = func
+                    print("ACTION_REGISTRY: ", ACTION_REGISTRY)
+                    logger.info("Callback registered to node")
+                    return True
+                else:
+                    logger.info("Callback input not valid. Aborting...")
+                    return False
+
+            # register the action normally
+            ACTION_REGISTRY[action_name] = func
             return True
 
         def __register_callback(self, func, node: Node) -> bool:
