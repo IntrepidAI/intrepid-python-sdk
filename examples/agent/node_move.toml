@@ -1,14 +1,15 @@
 [node]
-type = "pick_goal"
+type = "move_to"
 
 [inputs]
 flow = "FLOW"
-param1 = "INTEGER"
-param2 = "INTEGER"
+goal_x = "FLOAT"
+goal_y = "FLOAT"
+goal_z = "FLOAT"
 
 [outputs]
 flow = "FLOW"
-output = "INTEGER"
+status = "BOOLEAN"
 
 [qos]
 reliability = "BestEffort"

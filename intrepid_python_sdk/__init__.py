@@ -4,6 +4,7 @@ import logging
 from typing import Callable, Dict, List, Optional
 from collections.abc import Iterable
 import asyncio
+import inspect
 import importlib_metadata
 import os, sys
 import subprocess
@@ -79,7 +80,7 @@ class Intrepid:
         """
 
         self.qos = None
-        self.__unix_socket_path = None
+        # self.__unix_socket_path = None
         self.__node = None
         self.__node_info = None
         self.__callback = None
@@ -92,30 +93,59 @@ class Intrepid:
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         logger.info("WebSocket connection established.")
-        func = self.__callback()
+        # endpoint = request.path.lstrip("/")
+
+
+        # func = ACTION_REGISTRY.get(endpoint, None)
+        # print("callback set at ", func)
+        # if func is None:
+        #     return
+
+        # import pdb; pdb.set_trace();
+
+        # func = self.__callback()
 
         closed_abnormally = False  # Flag to determine if restart is needed
         try:
             async for msg in ws:
-                # print(msg)
+                print("msg: ", msg)
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     msg_dict = json.loads(msg.data)
                     request_id = msg_dict.get("id")
                     discovery_object = msg_dict.get("discovery")
                     init_object = msg_dict.get("init")
+
                     # print(init_object)
                     if init_object is not None:
                         logger.info("Agent reset. Restarting node...")
                         # self.restart_node()
 
                     exec_object = msg_dict.get("exec")
+                    print("exec_object:", exec_object)
+
                     if discovery_object is not None:
                         await ws.send_json({
                             "id": request_id,
-                            "discovery_ok": {"nodes": [self.__node.to_dict()]},
+                            "discovery_ok": {"options":{"init_timeout":123,"exec_timeout":123},
+                                             "nodes": [v.to_dict() for k, v in self.nodes.items()]},
                         })
+
+
+                        # await ws.send_json({
+                        #     "id": request_id,
+                        #     "discovery_ok": {"nodes": [self.__node.to_dict()]},
+                        # })
                     elif init_object is not None:
                         irm = InitRequest(init_object["node_id"], init_object["node_type"])
+                        print("IRM: ", irm)
+                        node_type = init_object["node_type"]
+                        print("NODE TYPE:", node_type)
+                        func = ACTION_REGISTRY.get(node_type, None)
+
+                        print("callback set at ", func)
+                        if func is None:
+                            return
+
                         irm.exec_inputs = init_object["exec_inputs"]
                         irm.exec_outputs = init_object["exec_outputs"]
                         await ws.send_json({
@@ -132,8 +162,14 @@ class Intrepid:
                             exec_resp.exec_id = 0
                             # Execute callback function and return ExecResponse object
                             # out = self.__callback(*inputs)
-                            out = func(*inputs)
+                            if inspect.iscoroutinefunction(func):
+                                out = await func(*inputs)
+                            else:
+                                out = func(*inputs)
+
                             exec_resp.outputs = out if isinstance(out, tuple) else (out,)
+                            print("exec_resp: ", exec_resp.to_dict())
+                            print("request_id: ", request_id)
                             await ws.send_json({
                                 "id": request_id,
                                 "exec_ok": exec_resp.to_dict(),
@@ -167,14 +203,17 @@ class Intrepid:
             #     logger.warning("WebSocket connection finalized unexpectedly.")
         return ws
 
+    # def __add_route(self, route: str):
+    #     self.__app.add_routes([
+    #                     web.get(f"/{route}", self.websocket_handler),
+    #                 ])
+
     # Decorators for adapter authors
     def action(self, name: str):
         """Register an action handler for name"""
         def decorator(fn: Callable):
             ACTION_REGISTRY[name] = fn
-            self.__app.add_routes([
-                web.get(f"/{name}", self.websocket_handler),
-            ])
+            # self.__add_route(name)
             return fn
         return decorator
 
@@ -182,9 +221,7 @@ class Intrepid:
         """Register a sensor handler (pushes world updates)"""
         def decorator(fn: Callable):
             SENSOR_REGISTRY[name] = fn
-            self.__app.add_routes([
-                web.get(f"/{name}", self.websocket_handler),
-            ])
+            # self.__add_route(name)
             return fn
         return decorator
 
@@ -266,6 +303,10 @@ class Intrepid:
         loop.run_until_complete(self.start_server(host, port))
         loop.run_forever()
 
+    @property
+    def nodes(self)->Dict[str, Node]:
+        return Intrepid.__get_instance().nodes
+
     @staticmethod
     def config():
         """
@@ -275,18 +316,20 @@ class Intrepid:
         return Intrepid.__get_instance().configuration_manager.intrepid_config
 
     def register_node(self, node: Node):
-        print("Registering node")
         # print(node)
         self.__node = node
-        registered = Intrepid.__Intrepid().__register_node(node)
+        registered = Intrepid.__get_instance().__register_node(node)
         print(registered)
         if registered:
-            self.action(node.name)
+            # self.action(node.name)
+            ACTION_REGISTRY[node.name] = None
             # print("HELLO HELLO", res)
-            print("ACTION_REGISTRY: ", ACTION_REGISTRY)
+            # print("ACTION_REGISTRY: ", ACTION_REGISTRY)
 
-    def register_action(self, action_name: str, func):
-        return Intrepid.__Intrepid().__register_action(action_name, func)
+    def register_action(self, action_name: str, func: Callable) -> bool:
+        res = Intrepid.__get_instance().__register_action(action_name, func)
+        # self.__add_route(action_name)
+        return res
 
     def register_callback(self, func):
         if self.__callback is None:
@@ -373,11 +416,17 @@ class Intrepid:
             self.configuration_manager = ConfigManager()
             self.device_context = {}
 
+        @property
+        def nodes(self)->Dict[str, Node]:
+            return self.__nodes
+
         def __register_node(self, node: Node):
             logger.info("Registering node")
             # runtime can have multiple nodes
             if node.name not in self.__nodes:
+                # import pdb; pdb.set_trace();
                 self.__nodes[node.name] = node
+                logger.info("nodes: ", self.__nodes)
                 return True
             else:
                 logger.info("Node already registered under the same name ", node.name)
@@ -386,16 +435,20 @@ class Intrepid:
         def __register_adapter(self, action_name, adapter) -> bool:
             return True
 
-        def __register_action(self, action_name: str, func) -> bool:
+        def __register_action(self, action_name: str, func: Callable) -> bool:
             if action_name in ACTION_REGISTRY:
-                logger.info("Action already registered...returning")
-                return False
-
+                if ACTION_REGISTRY[action_name] is not None:
+                    logger.info("Action already registered...returning")
+                    return False
+            print(action_name)
             # this action_name is for a node
             if action_name in self.__nodes:
                 # Get node with same action name
                 node = self.__nodes[action_name]
-                is_valid = self.__validate_callback_parameters(node, func)
+                print(node)
+
+                # is_valid = self.__validate_callback_parameters(node, func)
+                is_valid = True
                 print("Callback is valid: ", is_valid)
                 if is_valid:
                     logger.info("Callback is valid. Proceeding...")
@@ -410,6 +463,7 @@ class Intrepid:
 
             # register the action normally
             ACTION_REGISTRY[action_name] = func
+            print("ACTION_REGISTRY: ", ACTION_REGISTRY)
             return True
 
         def __register_callback(self, func, node: Node) -> bool:
@@ -488,7 +542,10 @@ class Intrepid:
             """
             # Get parameter names of the callback function
             # callback_params = callback().__code__.co_varnames[:callback.__code__.co_argcount]
+            # import pdb; pdb.set_trace();
+
             callback_param_types = callback().__annotations__  # This is a dictionary of parameter names and types
+            print(callback_param_types)
             callback_return_values = []
             if 'return' in callback_param_types:
                 callback_retval = callback_param_types['return']

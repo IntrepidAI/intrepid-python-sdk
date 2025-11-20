@@ -1,7 +1,7 @@
 # run_demo.py
 import asyncio
 # from intrepid_python_sdk.agent.adapters import DemoAdapter, PX4Adapter, ROS2Adapter
-# from intrepid_python_sdk.agent.adapter import action, sensor
+from intrepid_python_sdk.agent.adapter import action, sensor
 from intrepid_python_sdk import Intrepid, Qos, Node, IntrepidType, Type
 
 
@@ -77,9 +77,6 @@ from intrepid_python_sdk import Intrepid, Qos, Node, IntrepidType, Type
 
 #     # Validate all graph actions are mapped to adapters and start (or abort)
 #     await runtime.start()
-
-
-
 #     # runtime = RuntimeClient(graph)
 #     # runtime.set_capabilities(capabilities)
 #     # at this point agent shows appropriate node library
@@ -94,31 +91,44 @@ from intrepid_python_sdk import Intrepid, Qos, Node, IntrepidType, Type
 #     # In real usage: load behavior graph, runtime will request actions, call adapter.handle_action_request(...)
 #     # await asyncio.sleep(10)
 #     # await runtime.stop()
-
 # # if __name__ == "__main__":
 # #     asyncio.run(main())
 
-# Create my node
-mynode = Node()
-mynode.from_def("./node.toml")
 
-runtime = Intrepid()
-runtime.register_node(mynode)
-
-# @runtime.action("ActionName1")
-# async def my_node_1():
-#     # YOUR CODE HERE
-#     pass
-
-# @runtime.action("ActionName2")
-# async def my_node_2(params):
-#     # YOUR CODE HERE
-#     pass
 
 def foo():
     pass
 
-runtime.register_action("action_1", foo)
-# runtime.register_action("action_1", foo)
+def my_picking_foo(param1: int, param2: int)-> int:
+    return param1 + param2
 
-runtime.start(port=1111)
+async def move_to(x: float, y: float, z: float)-> bool:
+    print(x,y,z)
+    await asyncio.sleep(2.0)
+    return True
+
+
+if __name__ == "__main__":
+    # Create my node
+    mynode = Node()
+    mynode.from_def("./node.toml")
+    node_move = Node()
+    node_move.from_def("./node_move.toml")
+
+    runtime = Intrepid()
+
+    # Register node (still need to register adapter for this node name)
+    runtime.register_node(node_move)
+    runtime.register_node(mynode)
+
+    runtime.register_action(mynode.name, my_picking_foo)
+    runtime.register_action(node_move.name, move_to)
+
+    @runtime.action("action_name_1")
+    async def my_node_1():
+        # YOUR CODE HERE
+        pass
+
+    runtime.register_action("action_name", foo)
+    # runtime.register_action("action_1", foo)
+    runtime.start(port=1111)

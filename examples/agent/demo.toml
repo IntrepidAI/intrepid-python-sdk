@@ -1,8 +1,7 @@
 project = "https://labs.intrepid.ai/projects/34/C8aPEiy63yiGUsv53MkZTHof"
 rust_log = "intrepid_agent=debug"
 plugins = [
-    "ws://127.0.0.1:11111",
-    "ws://127.0.0.1:22222"
+    "ws://127.0.0.1:1111"
 ]
 
 [dashboard]
