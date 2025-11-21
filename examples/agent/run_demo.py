@@ -103,6 +103,17 @@ def my_picking_foo(param1: int, param2: int)-> int:
     return param1 + param2
 
 async def move_to(x: float, y: float, z: float)-> bool:
+    """_summary_
+
+    Args:
+        x (float): _description_
+        y (float): _description_
+        z (float): _description_
+
+    Returns:
+        bool: _description_
+    """
+
     print(x,y,z)
     await asyncio.sleep(2.0)
     return True
