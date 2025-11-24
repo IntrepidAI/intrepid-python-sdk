@@ -1,6 +1,6 @@
-from pydantic import BaseModel, model_validator, model_serializer, ModelWrapValidatorHandler
 from enum import Enum
 from typing import Optional, Self, Any
+from pydantic import BaseModel, model_validator, model_serializer, ModelWrapValidatorHandler
 
 
 class Empty(BaseModel):

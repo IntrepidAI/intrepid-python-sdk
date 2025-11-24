@@ -1,13 +1,14 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 import logging
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, get_args, get_origin
 from collections.abc import Iterable
 import asyncio
 import inspect
 import importlib_metadata
 import os, sys
-import subprocess
+# import subprocess
+from pydantic import BaseModel
 from websockets.server import serve, unix_serve
 from intrepid_python_sdk.config import _IntrepidConfig
 from datetime import datetime
@@ -37,16 +38,29 @@ from aiohttp import web, WSCloseCode
 import asyncio
 import json
 from typing import Callable, Dict, Any
+from .protocol import (
+    Discovery,
+    DiscoveryNodeSpec,
+    DiscoveryOptions,
+    DiscoveryPinContainer,
+    DiscoveryPinSpec,
+    DiscoveryPinType,
+    DiscoveryPinTypeKind,
+    Empty,
+    ExecReply,
+    IncomingMessage,
+    InitCommand,
+    OutgoingMessage,
+)
+from .intrepid_types import TYPE_MAP, Context
 
-
+# TODO move to constants
 __name__ = 'intrepid_python_sdk'
 __version__ = importlib_metadata.distribution(__name__).version
 
 
 # Set up the signal handler for SIGINT (Ctrl+C)
 signal.signal(signal.SIGINT, signal_handler)
-
-
 
 # TODO remove this and use log_manager
 # Configure logging
@@ -60,17 +74,29 @@ log_format = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(format=log_format)
 logger = logging.getLogger(__name__)  # Create a logger instance
 
-# Registries (module-level for MVP)
-ACTION_REGISTRY: Dict[str, Callable] = {}
-SENSOR_REGISTRY: Dict[str, Callable] = {}
 
 
 class Intrepid:
+
+    class Node(BaseModel):
+        func: Callable
+        spec: DiscoveryNodeSpec
+        first_arg_is_context: bool
+        tuple_output: bool
+        input_types: list[Any]
+        output_types: list[Any]
+
+    namespace: str | None = None
+    init_timeout: float = 2
+    exec_timeout: float = 2
+    all_nodes: dict[str, Node] = {}
+    debug_mode: bool = False
+
     __instance = None
     __restarted = None
     __original_callback = None
 
-    def __init__(self):
+    def __init__(self, *, namespace: str | None = None):
         """
         Initialize the Intrepid SDK.
 
@@ -79,6 +105,7 @@ class Intrepid:
         @return:
         """
 
+        self.namespace = namespace
         self.qos = None
         # self.__unix_socket_path = None
         self.__node = None
@@ -88,142 +115,271 @@ class Intrepid:
         self.__app = None
         self.__runner = self.create_runner()
 
+    async def websocket_handler(self, request: Any):
+        websocket = web.WebSocketResponse()
+        await websocket.prepare(request)
 
-    async def websocket_handler(self, request):
-        ws = web.WebSocketResponse()
-        await ws.prepare(request)
-        logger.info("WebSocket connection established.")
-        # endpoint = request.path.lstrip("/")
+        class ActiveNode(BaseModel):
+            node: Intrepid.Node
+            state: Any
 
+        active_nodes: dict[int, ActiveNode] = {}
 
-        # func = ACTION_REGISTRY.get(endpoint, None)
-        # print("callback set at ", func)
-        # if func is None:
-        #     return
+        def assert_spec_matches(spec: DiscoveryNodeSpec, command: InitCommand):
+            spec_exec_inputs = [input for input in spec.inputs or [] if input.type.kind == DiscoveryPinTypeKind.FLOW]
+            if len(command.exec_inputs) != len(spec_exec_inputs):
+                raise ValueError("expected %d flow inputs, got %d" % (len(spec_exec_inputs), len(command.exec_inputs)))
 
-        # import pdb; pdb.set_trace();
+            spec_exec_outputs = [output for output in spec.outputs or [] if output.type.kind == DiscoveryPinTypeKind.FLOW]
+            if len(command.exec_outputs) != len(spec_exec_outputs):
+                raise ValueError("expected %d flow outputs, got %d" % (len(spec_exec_outputs), len(command.exec_outputs)))
 
-        # func = self.__callback()
+            spec_data_inputs = [input for input in spec.inputs or [] if input.type.kind != DiscoveryPinTypeKind.FLOW]
+            if len(command.data_inputs) != len(spec_data_inputs):
+                raise ValueError("expected %d data inputs, got %d" % (len(spec_data_inputs), len(command.data_inputs)))
 
-        closed_abnormally = False  # Flag to determine if restart is needed
-        try:
-            async for msg in ws:
-                print("msg: ", msg)
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    msg_dict = json.loads(msg.data)
-                    request_id = msg_dict.get("id")
-                    discovery_object = msg_dict.get("discovery")
-                    init_object = msg_dict.get("init")
+            spec_data_outputs = [output for output in spec.outputs or [] if output.type.kind != DiscoveryPinTypeKind.FLOW]
+            if len(command.data_outputs) != len(spec_data_outputs):
+                raise ValueError("expected %d data outputs, got %d" % (len(spec_data_outputs), len(command.data_outputs)))
 
-                    # print(init_object)
-                    if init_object is not None:
-                        logger.info("Agent reset. Restarting node...")
-                        # self.restart_node()
+        async for message in websocket:
+            data = message.data
+            if self.debug_mode:
+                logger.info(f"<-- {data}")
+            command = IncomingMessage.model_validate_json(data)
 
-                    exec_object = msg_dict.get("exec")
-                    print("exec_object:", exec_object)
+            try:
+                if command.discovery:
+                    reply = OutgoingMessage(
+                        id=command.id,
+                        node=command.node,
+                        discovery_ok=Discovery(
+                            options=DiscoveryOptions(
+                                init_timeout=self.init_timeout,
+                                exec_timeout=self.exec_timeout,
+                            ),
+                            nodes=[self.all_nodes[node].spec for node in self.all_nodes],
+                        )
+                    )
+                elif command.init:
+                    node = self.all_nodes[command.init.node_type]
+                    if node is None:
+                        reply = OutgoingMessage(
+                            id=command.id,
+                            node=command.node,
+                            error=f"node {command.init.node_type} not found",
+                        )
+                    else:
+                        assert_spec_matches(node.spec, command.init)
+                        active_nodes[command.node or 0] = ActiveNode(node=node, state=None)
+                        reply = OutgoingMessage(
+                            id=command.id,
+                            node=command.node,
+                            init_ok=Empty(),
+                        )
+                elif command.exec:
+                    active_node = active_nodes[command.node or 0]
+                    state = active_node.state
+                    func = active_node.node.func
+                    context = None
 
-                    if discovery_object is not None:
-                        await ws.send_json({
-                            "id": request_id,
-                            "discovery_ok": {"options":{"init_timeout":123,"exec_timeout":123},
-                                             "nodes": [v.to_dict() for k, v in self.nodes.items()]},
-                        })
-
-
-                        # await ws.send_json({
-                        #     "id": request_id,
-                        #     "discovery_ok": {"nodes": [self.__node.to_dict()]},
-                        # })
-                    elif init_object is not None:
-                        irm = InitRequest(init_object["node_id"], init_object["node_type"])
-                        print("IRM: ", irm)
-                        node_type = init_object["node_type"]
-                        print("NODE TYPE:", node_type)
-                        func = ACTION_REGISTRY.get(node_type, None)
-
-                        print("callback set at ", func)
-                        if func is None:
-                            return
-
-                        irm.exec_inputs = init_object["exec_inputs"]
-                        irm.exec_outputs = init_object["exec_outputs"]
-                        await ws.send_json({
-                            "id": request_id,
-                            "init_ok": {},
-                        })
-                    elif exec_object is not None:
-                        exec_id = exec_object.get("exec_id")
-                        time = exec_object.get("time")
-                        inputs = exec_object.get("inputs")
-                        if exec_id is not None and time is not None and inputs is not None:
-                            exec_resp = ExecResponse()
-                            exec_resp.time = time
-                            exec_resp.exec_id = 0
-                            # Execute callback function and return ExecResponse object
-                            # out = self.__callback(*inputs)
-                            if inspect.iscoroutinefunction(func):
-                                out = await func(*inputs)
-                            else:
-                                out = func(*inputs)
-
-                            exec_resp.outputs = out if isinstance(out, tuple) else (out,)
-                            print("exec_resp: ", exec_resp.to_dict())
-                            print("request_id: ", request_id)
-                            await ws.send_json({
-                                "id": request_id,
-                                "exec_ok": exec_resp.to_dict(),
-                            })
+                    def deserialize_single_input(data: Any, annotation: Any) -> Any:
+                        if issubclass(annotation, BaseModel):
+                            return annotation.model_validate(data)
                         else:
-                            logger.error("ExecRequest has invalid payload")
-                elif msg.type == aiohttp.WSMsgType.error:
-                    logger.error(f"WebSocket connection error: {ws.exception()}")
-                    closed_abnormally = True
-                    break
-                # elif msg.type == aiohttp.WSMsgType.CLOSE:
-                #     logger.info("WebSocket close message received.")
-                #     break
-        except Exception as e:
-            logger.error(f"WebSocket handler exception: {e}")
-            closed_abnormally = True
+                            return data
 
-        # if ws.closed:
-        #     print("websocket closed")
+                    def deserialize_any_input(data: Any, annotation: Any) -> Any:
+                        if get_origin(annotation) is list:
+                            inner_type = get_args(annotation)[0]
+                            return [deserialize_single_input(data, inner_type) for data in data]
+                        else:
+                            return deserialize_single_input(data, annotation)
 
-        # finally:
-            # if ws.closed:
-            #     logger.info(f"WebSocket connection closed. Abnormal: {closed_abnormally}")
-            #     if closed_abnormally:
-            #         logger.info("WebSocket closed abnormally. Restarting node...")
-            #         print("Restarting node...")
-            #         await self.restart_node()
-            #     else:
-            #         logger.info("WebSocket closed normally.")
-            # else:
-            #     logger.warning("WebSocket connection finalized unexpectedly.")
-        return ws
+                    inputs = []
+                    for i, type in enumerate(active_node.node.input_types):
+                        inputs.append(deserialize_any_input(command.exec.inputs[i], type))
+
+                    if active_node.node.first_arg_is_context:
+                        async def debug_log_callback(message: str) -> None:
+                            debug_reply = OutgoingMessage(
+                                id=0,
+                                node=command.node,
+                                debug_message=message,
+                            )
+                            data = debug_reply.model_dump_json(exclude_none=True)
+                            if self.debug_mode:
+                                logger.info(f"--> {data}")
+                            await websocket.send_str(data)
+
+                        context = Context(state, debug_log_callback)
+                        inputs = [context] + inputs
+
+                    if inspect.iscoroutinefunction(func):
+                        result = await func(*inputs)
+                    else:
+                        result = func(*inputs)
+
+                    if not active_node.node.tuple_output:
+                        result = [result]
+
+                    if context is not None:
+                        active_nodes[command.node or 0].state = context.state
+
+                    reply = OutgoingMessage(
+                        id=command.id,
+                        node=command.node,
+                        exec_ok=ExecReply(
+                            exec_id=command.exec.exec_id,
+                            outputs=result,
+                        ),
+                    )
+                else:
+                    reply = OutgoingMessage(
+                        id=command.id,
+                        node=command.node,
+                        error="unsupported command",
+                    )
+
+                data = reply.model_dump_json(exclude_none=True)
+
+            except Exception as e:
+                reply = OutgoingMessage(
+                    id=command.id,
+                    node=command.node,
+                    error=str(e),
+                )
+                import traceback
+                traceback.print_exc()
+                data = reply.model_dump_json(exclude_none=True)
+
+            if self.debug_mode:
+                logger.info(f"--> {data}")
+            await websocket.send_str(data)
+
+        return websocket
+
+    # TODO (@rlidwka): merge error handling into websocket_handler
+    # async def websocket_handler(self, request):
+    #     ws = web.WebSocketResponse()
+    #     await ws.prepare(request)
+    #     logger.info("WebSocket connection established.")
+    #     # endpoint = request.path.lstrip("/")
+    #     # func = ACTION_REGISTRY.get(endpoint, None)
+    #     # print("callback set at ", func)
+    #     # if func is None:
+    #     #     return
+    #     # import pdb; pdb.set_trace();
+    #     # func = self.__callback()
+    #     closed_abnormally = False  # Flag to determine if restart is needed
+    #     try:
+    #         async for msg in ws:
+    #             print("msg: ", msg)
+    #             if msg.type == aiohttp.WSMsgType.TEXT:
+    #                 msg_dict = json.loads(msg.data)
+    #                 request_id = msg_dict.get("id")
+    #                 discovery_object = msg_dict.get("discovery")
+    #                 init_object = msg_dict.get("init")
+    #                 # print(init_object)
+    #                 if init_object is not None:
+    #                     logger.info("Agent reset. Restarting node...")
+    #                     # self.restart_node()
+    #                 exec_object = msg_dict.get("exec")
+    #                 print("exec_object:", exec_object)
+    #                 if discovery_object is not None:
+    #                     await ws.send_json({
+    #                         "id": request_id,
+    #                         "discovery_ok": {"options":{"init_timeout":123,"exec_timeout":123},
+    #                                          "nodes": [v.to_dict() for k, v in self.nodes.items()]},
+    #                     })
+    #                     # await ws.send_json({
+    #                     #     "id": request_id,
+    #                     #     "discovery_ok": {"nodes": [self.__node.to_dict()]},
+    #                     # })
+    #                 elif init_object is not None:
+    #                     irm = InitRequest(init_object["node_id"], init_object["node_type"])
+    #                     print("IRM: ", irm)
+    #                     node_type = init_object["node_type"]
+    #                     print("NODE TYPE:", node_type)
+    #                     func = ACTION_REGISTRY.get(node_type, None)
+    #                     print("callback set at ", func)
+    #                     if func is None:
+    #                         return
+    #                     irm.exec_inputs = init_object["exec_inputs"]
+    #                     irm.exec_outputs = init_object["exec_outputs"]
+    #                     await ws.send_json({
+    #                         "id": request_id,
+    #                         "init_ok": {},
+    #                     })
+    #                 elif exec_object is not None:
+    #                     exec_id = exec_object.get("exec_id")
+    #                     time = exec_object.get("time")
+    #                     inputs = exec_object.get("inputs")
+    #                     if exec_id is not None and time is not None and inputs is not None:
+    #                         exec_resp = ExecResponse()
+    #                         exec_resp.time = time
+    #                         exec_resp.exec_id = 0
+    #                         # Execute callback function and return ExecResponse object
+    #                         # out = self.__callback(*inputs)
+    #                         if inspect.iscoroutinefunction(func):
+    #                             out = await func(*inputs)
+    #                         else:
+    #                             out = func(*inputs)
+    #                         exec_resp.outputs = out if isinstance(out, tuple) else (out,)
+    #                         print("exec_resp: ", exec_resp.to_dict())
+    #                         print("request_id: ", request_id)
+    #                         await ws.send_json({
+    #                             "id": request_id,
+    #                             "exec_ok": exec_resp.to_dict(),
+    #                         })
+    #                     else:
+    #                         logger.error("ExecRequest has invalid payload")
+    #             elif msg.type == aiohttp.WSMsgType.error:
+    #                 logger.error(f"WebSocket connection error: {ws.exception()}")
+    #                 closed_abnormally = True
+    #                 break
+    #             # elif msg.type == aiohttp.WSMsgType.CLOSE:
+    #             #     logger.info("WebSocket close message received.")
+    #             #     break
+    #     except Exception as e:
+    #         logger.error(f"WebSocket handler exception: {e}")
+    #         closed_abnormally = True
+    #     # if ws.closed:
+    #     #     print("websocket closed")
+    #     # finally:
+    #         # if ws.closed:
+    #         #     logger.info(f"WebSocket connection closed. Abnormal: {closed_abnormally}")
+    #         #     if closed_abnormally:
+    #         #         logger.info("WebSocket closed abnormally. Restarting node...")
+    #         #         print("Restarting node...")
+    #         #         await self.restart_node()
+    #         #     else:
+    #         #         logger.info("WebSocket closed normally.")
+    #         # else:
+    #         #     logger.warning("WebSocket connection finalized unexpectedly.")
+    #     return ws
 
     # def __add_route(self, route: str):
     #     self.__app.add_routes([
     #                     web.get(f"/{route}", self.websocket_handler),
     #                 ])
 
-    # Decorators for adapter authors
-    def action(self, name: str):
-        """Register an action handler for name"""
-        def decorator(fn: Callable):
-            ACTION_REGISTRY[name] = fn
-            # self.__add_route(name)
-            return fn
-        return decorator
+    # # Decorators for adapter authors
+    # def action(self, name: str):
+    #     """Register an action handler for name"""
+    #     def decorator(fn: Callable):
+    #         ACTION_REGISTRY[name] = fn
+    #         # self.__add_route(name)
+    #         return fn
+    #     return decorator
 
-    def sensor(self, name: str):
-        """Register a sensor handler (pushes world updates)"""
-        def decorator(fn: Callable):
-            SENSOR_REGISTRY[name] = fn
-            # self.__add_route(name)
-            return fn
-        return decorator
+    # def sensor(self, name: str):
+    #     """Register a sensor handler (pushes world updates)"""
+    #     def decorator(fn: Callable):
+    #         SENSOR_REGISTRY[name] = fn
+    #         # self.__add_route(name)
+    #         return fn
+    #     return decorator
 
     async def restart_node(self):
         """
@@ -277,16 +433,16 @@ class Intrepid:
         return web.AppRunner(self.__app)
 
     async def start_server(self, host, port):
-        # runner = self.create_runner()
-        print("\nListening on host {}:{}".format(host, port))
+        logger.info("\nCan connect Intrepid Agent to host {}:{}".format(host, port))
         await self.__runner.setup()
         site = web.TCPSite(self.__runner, host, port)
         await site.start()
 
     def start(self, host=WS_HOST, port=WS_PORT):
-        if self.__callback is None and not ACTION_REGISTRY and not SENSOR_REGISTRY:
-            log(TAG_HTTP_REQUEST, LogLevel.ERROR, ERROR_REGISTER_CALLBACK)
-            sys.exit(1)
+        # if self.__callback is None and not ACTION_REGISTRY and not SENSOR_REGISTRY:
+        #     log(TAG_HTTP_REQUEST, LogLevel.ERROR, ERROR_REGISTER_CALLBACK)
+        #     sys.exit(1)
+
         # # Define the Unix domain socket path
         # timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         # unix_socket_path = f"/tmp/intrepid-ws-{timestamp}.sock"
@@ -297,7 +453,7 @@ class Intrepid:
         # asyncio.run(wsserver(self.__unix_socket_path))
 
         for route in self.__app.router.routes():
-            print(route)
+            logger.debug(route)
 
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.start_server(host, port))
@@ -315,22 +471,124 @@ class Intrepid:
         """
         return Intrepid.__get_instance().configuration_manager.intrepid_config
 
-    def register_node(self, node: Node):
-        # print(node)
-        self.__node = node
-        registered = Intrepid.__get_instance().__register_node(node)
-        print(registered)
-        if registered:
-            # self.action(node.name)
-            ACTION_REGISTRY[node.name] = None
-            # print("HELLO HELLO", res)
-            # print("ACTION_REGISTRY: ", ACTION_REGISTRY)
+    def register(
+        self,
+        func: Callable,
+        *,
+        name: str | None = None,
+        label: str | None = None,
+        description: str | None = None,
+    ):
+        # if callable(name):
+        #     raise TypeError(
+        #         "@register decorator was used incorrectly, use @register() instead of @register"
+        #     )
 
-    def register_action(self, action_name: str, func: Callable) -> bool:
-        res = Intrepid.__get_instance().__register_action(action_name, func)
-        # self.__add_route(action_name)
-        return res
+        def name_to_label(name: str) -> str:
+            label = name.split('/')[-1].replace('_', " ")
+            return label.title()
 
+        def get_type_name(annotation: type) -> tuple[str, DiscoveryPinContainer]:
+            if get_origin(annotation) is list:
+                inner_type = get_args(annotation)[0]
+                type_name = TYPE_MAP.get(inner_type)
+                type_container = DiscoveryPinContainer.ARRAY
+                if type_name is None:
+                    raise ValueError(f"unsupported inner type in list: {inner_type}")
+            else:
+                type_name = TYPE_MAP.get(annotation)
+                type_container = DiscoveryPinContainer.SINGLE
+                if type_name is None:
+                    raise ValueError(f"unsupported type: {annotation}")
+
+            return type_name, type_container
+
+        def decorator(func: Callable) -> Callable:
+            node_name = name or func.__name__
+
+            if node_name == "<lambda>":
+                raise ValueError("you must provide a name for lambda functions")
+
+            full_name = f"{self.namespace}/{node_name}" if self.namespace else node_name
+            node_doc = description or func.__doc__ or None
+
+            inputs: list[DiscoveryPinSpec] = []
+            outputs: list[DiscoveryPinSpec] = []
+
+            inputs.append(DiscoveryPinSpec(
+                label="",
+                type=DiscoveryPinType(kind=DiscoveryPinTypeKind.FLOW),
+            ))
+            outputs.append(DiscoveryPinSpec(
+                label="",
+                type=DiscoveryPinType(kind=DiscoveryPinTypeKind.FLOW),
+            ))
+
+            sig = inspect.signature(func, eval_str=True)
+            first_arg_is_context = False
+            tuple_output = False
+            input_types: list[Any] = []
+            output_types: list[Any] = []
+
+            for i, param in enumerate(sig.parameters.values()):
+                if param.annotation is Context or get_origin(param.annotation) is Context:
+                    if i != 0:
+                        raise ValueError(f"context must be the first parameter")
+
+                    first_arg_is_context = True
+                    continue
+
+                if param.annotation is inspect.Parameter.empty:
+                    raise ValueError(f"parameter {param.name} needs type annotation")
+
+                type_name, type_container = get_type_name(param.annotation)
+                inputs.append(DiscoveryPinSpec(
+                    label=param.name,
+                    type=DiscoveryPinType(kind=DiscoveryPinTypeKind.DATA, data_type=type_name),
+                    container=type_container,
+                    default=None if param.default is inspect._empty else param.default,
+                ))
+                input_types.append(param.annotation)
+
+            if sig.return_annotation is not inspect.Parameter.empty:
+                if get_origin(sig.return_annotation) is tuple:
+                    tuple_output = True
+                    for i, inner_type in enumerate(get_args(sig.return_annotation)):
+                        type_name, type_container = get_type_name(inner_type)
+                        outputs.append(DiscoveryPinSpec(
+                            label=f"out{i+1}",
+                            type=DiscoveryPinType(kind=DiscoveryPinTypeKind.DATA, data_type=type_name),
+                            container=type_container,
+                        ))
+                        output_types.append(inner_type)
+                else:
+                    type_name, type_container = get_type_name(sig.return_annotation)
+                    outputs.append(DiscoveryPinSpec(
+                        label="out",
+                        type=DiscoveryPinType(kind=DiscoveryPinTypeKind.DATA, data_type=type_name),
+                        container=type_container,
+                    ))
+                    output_types.append(sig.return_annotation)
+
+            self.all_nodes[full_name] = Intrepid.Node(
+                func=func,
+                spec=DiscoveryNodeSpec(
+                    type=full_name,
+                    label=label or name_to_label(node_name),
+                    description=node_doc,
+                    inputs=inputs,
+                    outputs=outputs,
+                ),
+                first_arg_is_context=first_arg_is_context,
+                tuple_output=tuple_output,
+                input_types=input_types,
+                output_types=output_types,
+            )
+            return func
+
+        return decorator(func)
+
+    # TODO make obsolete
     def register_callback(self, func):
         if self.__callback is None:
             log(TAG_HTTP_REQUEST, LogLevel.INFO, INFO_CALLBACK_REGISTERED)
@@ -355,8 +613,8 @@ class Intrepid:
         Return the details of this node
         @return: Status.
         """
-        print("\nAttaching QoS policy")
-        print(qos)
+        logger.info("\nAttaching QoS policy")
+        logger.info(qos)
         return Intrepid.__get_instance().create_qos(qos)
 
     # @staticmethod
@@ -394,9 +652,7 @@ class Intrepid:
 
         :return: Intrepid
         """
-        # if not Intrepid.__instance:
-        #     Intrepid.__instance = Intrepid.__Intrepid()
-        # return Intrepid.__instance
+
         if Intrepid.__instance is None:
             Intrepid.__instance = Intrepid.__Intrepid()  # Create the inner class instance
         return Intrepid.__instance
@@ -411,7 +667,6 @@ class Intrepid:
             # Node input/output types and names
             self.node_specs = None
             self.__nodes: Dict[str, Node] = {}
-            # self.__mapped_callbacks: Dict[str, bool] = {}
             self.status = Status.NOT_INITIALIZED
             self.configuration_manager = ConfigManager()
             self.device_context = {}

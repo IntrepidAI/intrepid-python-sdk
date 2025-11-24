@@ -1,19 +1,25 @@
-project = "https://labs.intrepid.ai/projects/34/C8aPEiy63yiGUsv53MkZTHof"
-rust_log = "intrepid_agent=debug"
-plugins = [
-    "ws://127.0.0.1:1111"
-]
+[[plugins]]
+
+[[plugins.mavlink]]
+messages = "./mavlink_builtin_messages.zip"
+
+[[plugins.ros2]]
+messages = "./ros2_builtin_messages.zip"
+
+[[plugins.px4]]
+src_addr = "0.0.0.0:30881"
+px4_addr = "127.0.0.1:18570"
+
+[[plugins.my_plug]]
+endpoint = "ws://127.0.0.1:1111"
+
+[[plugins.my_other_plug]]
+endpoint = "ws://127.0.0.1:1122"
 
 [dashboard]
 host = "0.0.0.0"
 port = 9180
 
-[mavlink]
-messages = "./mavlink_builtin_messages.zip"
-
-[ros2]
-messages = "./ros2_builtin_messages.zip"
-
-[px4]
-src_addr = "0.0.0.0:30881"
-px4_addr = "127.0.0.1:18570"
+[credentials]
+token = "INTREPID_ACCESS_TOKEN"
+rust_log = "intrepid_agent=debug"
