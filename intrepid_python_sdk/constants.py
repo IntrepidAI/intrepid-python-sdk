@@ -9,6 +9,7 @@ WS_PORT = 9999
 
 
 # TAGS
+TAG_APP_NAME = "intrepid_python_sdk"
 TAG_MAIN = "Intrepid"
 TAG_INITIALIZATION = "Initialization"
 TAG_STATUS = "Status"
@@ -61,7 +62,7 @@ ERROR_UPDATE_CONTEXT_RESERVED = "Context key '{}' is reserved by flagship and ca
 ERROR_UPDATE_CONTEXT_TYPE = "Context key '{}' value must be of type: '{}'."
 ERROR_UPDATE_CONTEXT_EMPTY = "Context key '{}' will be ignored as its value is empty'."
 ERROR_UPDATE_CONTEXT_EMPTY_KEY = "Context key must be a non null or empty 'str'."
-
+ERROR_UNSUPPORTED_COMMAND = "unsupported command"
 ERROR_METHOD_DEACTIVATED = "Method '{}' have been deactivated: {}"
 ERROR_METHOD_DEACTIVATED_PANIC = "SDK is running in panic mode."
 ERROR_METHOD_DEACTIVATED_NOT_READY = "SDK is not started yet."

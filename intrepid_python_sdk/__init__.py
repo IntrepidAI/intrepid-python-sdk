@@ -53,9 +53,10 @@ from .protocol import (
     OutgoingMessage,
 )
 from .intrepid_types import TYPE_MAP, Context
+from . import constants
+from .constants import TAG_APP_NAME
 
-# TODO move to constants
-__name__ = 'intrepid_python_sdk'
+__name__ = TAG_APP_NAME
 __version__ = importlib_metadata.distribution(__name__).version
 
 
@@ -238,7 +239,7 @@ class Intrepid:
                     reply = OutgoingMessage(
                         id=command.id,
                         node=command.node,
-                        error="unsupported command",
+                        error= constants.ERROR_UNSUPPORTED_COMMAND,
                     )
 
                 data = reply.model_dump_json(exclude_none=True)
@@ -258,128 +259,6 @@ class Intrepid:
             await websocket.send_str(data)
 
         return websocket
-
-    # TODO (@rlidwka): merge error handling into websocket_handler
-    # async def websocket_handler(self, request):
-    #     ws = web.WebSocketResponse()
-    #     await ws.prepare(request)
-    #     logger.info("WebSocket connection established.")
-    #     # endpoint = request.path.lstrip("/")
-    #     # func = ACTION_REGISTRY.get(endpoint, None)
-    #     # print("callback set at ", func)
-    #     # if func is None:
-    #     #     return
-    #     # import pdb; pdb.set_trace();
-    #     # func = self.__callback()
-    #     closed_abnormally = False  # Flag to determine if restart is needed
-    #     try:
-    #         async for msg in ws:
-    #             print("msg: ", msg)
-    #             if msg.type == aiohttp.WSMsgType.TEXT:
-    #                 msg_dict = json.loads(msg.data)
-    #                 request_id = msg_dict.get("id")
-    #                 discovery_object = msg_dict.get("discovery")
-    #                 init_object = msg_dict.get("init")
-    #                 # print(init_object)
-    #                 if init_object is not None:
-    #                     logger.info("Agent reset. Restarting node...")
-    #                     # self.restart_node()
-    #                 exec_object = msg_dict.get("exec")
-    #                 print("exec_object:", exec_object)
-    #                 if discovery_object is not None:
-    #                     await ws.send_json({
-    #                         "id": request_id,
-    #                         "discovery_ok": {"options":{"init_timeout":123,"exec_timeout":123},
-    #                                          "nodes": [v.to_dict() for k, v in self.nodes.items()]},
-    #                     })
-    #                     # await ws.send_json({
-    #                     #     "id": request_id,
-    #                     #     "discovery_ok": {"nodes": [self.__node.to_dict()]},
-    #                     # })
-    #                 elif init_object is not None:
-    #                     irm = InitRequest(init_object["node_id"], init_object["node_type"])
-    #                     print("IRM: ", irm)
-    #                     node_type = init_object["node_type"]
-    #                     print("NODE TYPE:", node_type)
-    #                     func = ACTION_REGISTRY.get(node_type, None)
-    #                     print("callback set at ", func)
-    #                     if func is None:
-    #                         return
-    #                     irm.exec_inputs = init_object["exec_inputs"]
-    #                     irm.exec_outputs = init_object["exec_outputs"]
-    #                     await ws.send_json({
-    #                         "id": request_id,
-    #                         "init_ok": {},
-    #                     })
-    #                 elif exec_object is not None:
-    #                     exec_id = exec_object.get("exec_id")
-    #                     time = exec_object.get("time")
-    #                     inputs = exec_object.get("inputs")
-    #                     if exec_id is not None and time is not None and inputs is not None:
-    #                         exec_resp = ExecResponse()
-    #                         exec_resp.time = time
-    #                         exec_resp.exec_id = 0
-    #                         # Execute callback function and return ExecResponse object
-    #                         # out = self.__callback(*inputs)
-    #                         if inspect.iscoroutinefunction(func):
-    #                             out = await func(*inputs)
-    #                         else:
-    #                             out = func(*inputs)
-    #                         exec_resp.outputs = out if isinstance(out, tuple) else (out,)
-    #                         print("exec_resp: ", exec_resp.to_dict())
-    #                         print("request_id: ", request_id)
-    #                         await ws.send_json({
-    #                             "id": request_id,
-    #                             "exec_ok": exec_resp.to_dict(),
-    #                         })
-    #                     else:
-    #                         logger.error("ExecRequest has invalid payload")
-    #             elif msg.type == aiohttp.WSMsgType.error:
-    #                 logger.error(f"WebSocket connection error: {ws.exception()}")
-    #                 closed_abnormally = True
-    #                 break
-    #             # elif msg.type == aiohttp.WSMsgType.CLOSE:
-    #             #     logger.info("WebSocket close message received.")
-    #             #     break
-    #     except Exception as e:
-    #         logger.error(f"WebSocket handler exception: {e}")
-    #         closed_abnormally = True
-    #     # if ws.closed:
-    #     #     print("websocket closed")
-    #     # finally:
-    #         # if ws.closed:
-    #         #     logger.info(f"WebSocket connection closed. Abnormal: {closed_abnormally}")
-    #         #     if closed_abnormally:
-    #         #         logger.info("WebSocket closed abnormally. Restarting node...")
-    #         #         print("Restarting node...")
-    #         #         await self.restart_node()
-    #         #     else:
-    #         #         logger.info("WebSocket closed normally.")
-    #         # else:
-    #         #     logger.warning("WebSocket connection finalized unexpectedly.")
-    #     return ws
-
-    # def __add_route(self, route: str):
-    #     self.__app.add_routes([
-    #                     web.get(f"/{route}", self.websocket_handler),
-    #                 ])
-
-    # # Decorators for adapter authors
-    # def action(self, name: str):
-    #     """Register an action handler for name"""
-    #     def decorator(fn: Callable):
-    #         ACTION_REGISTRY[name] = fn
-    #         # self.__add_route(name)
-    #         return fn
-    #     return decorator
-
-    # def sensor(self, name: str):
-    #     """Register a sensor handler (pushes world updates)"""
-    #     def decorator(fn: Callable):
-    #         SENSOR_REGISTRY[name] = fn
-    #         # self.__add_route(name)
-    #         return fn
-    #     return decorator
 
     async def restart_node(self):
         """
@@ -433,7 +312,7 @@ class Intrepid:
         return web.AppRunner(self.__app)
 
     async def start_server(self, host, port):
-        logger.info("\nCan connect Intrepid Agent to host {}:{}".format(host, port))
+        logger.info("\nYou can now connect Intrepid Agent to host {}:{}".format(host, port))
         await self.__runner.setup()
         site = web.TCPSite(self.__runner, host, port)
         await site.start()

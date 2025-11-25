@@ -49,7 +49,7 @@ if __name__ == "__main__":
     runtime.register(simple_node_with_defaults)
     runtime.register(node_with_array_type)
     runtime.register(node_with_multiple_outputs)
-    runtime.register(node_with_complex_types)
+    runtime.register(node_with_complex_types, label="ComplexTypes", description="A node handling complex types")
     runtime.register(async_node)
     runtime.register(node_with_feedback)
     runtime.register(node_with_state)

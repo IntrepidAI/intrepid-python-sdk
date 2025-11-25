@@ -1,10 +1,10 @@
 [[plugins]]
 
-[[plugins.mavlink]]
-messages = "./mavlink_builtin_messages.zip"
+# [[plugins.mavlink]]
+# messages = "./mavlink_builtin_messages.zip"
 
-[[plugins.ros2]]
-messages = "./ros2_builtin_messages.zip"
+# [[plugins.ros2]]
+# messages = "./ros2_builtin_messages.zip"
 
 [[plugins.px4]]
 src_addr = "0.0.0.0:30881"
@@ -15,6 +15,9 @@ endpoint = "ws://127.0.0.1:1111"
 
 [[plugins.my_other_plug]]
 endpoint = "ws://127.0.0.1:1122"
+
+[[plugins.run_demo]]
+endpoint = "ws://127.0.0.1:8765"
 
 [dashboard]
 host = "0.0.0.0"
