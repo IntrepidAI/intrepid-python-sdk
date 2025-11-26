@@ -1,36 +1,32 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 import logging
-from typing import Callable, Dict, List, Optional, get_args, get_origin
+from typing import Callable, Dict, get_args, get_origin
 from collections.abc import Iterable
 import asyncio
 import inspect
 import importlib_metadata
-import os, sys
-# import subprocess
 from pydantic import BaseModel
-from websockets.server import serve, unix_serve
-from intrepid_python_sdk.config import _IntrepidConfig
 from datetime import datetime
 import signal
-from intrepid_python_sdk.config_manager import ConfigManager
-from intrepid_python_sdk.constants import WS_HOST, WS_PORT, TAG_STATUS, TAG_HTTP_REQUEST, \
+from .config_manager import ConfigManager
+from .constants import WS_HOST, WS_PORT, TAG_STATUS, TAG_HTTP_REQUEST, \
     INFO_STATUS_CHANGED, TAG_INITIALIZATION, INFO_CALLBACK_REGISTERED, \
     INFO_READY, INFO_WSSERVER_READY, INFO_STOPPED, INFO_SDK_READY, \
     ERROR_CONFIGURATION, ERROR_PARAM_TYPE, ERROR_PARAM_NUM, ERROR_PARAM_NAME, ERROR_REGISTER_CALLBACK
-from intrepid_python_sdk.decorators import param_types_validator
-from intrepid_python_sdk.errors import InitializationParamError
-from intrepid_python_sdk.log_manager import LogLevel
-from intrepid_python_sdk.utils import log, log_exception, signal_handler
-from intrepid_python_sdk.status import Status
-from intrepid_python_sdk.node import Node, Type, IntrepidType, DataElement
-from intrepid_python_sdk.qos import Qos
-from intrepid_python_sdk.message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
+from .decorators import param_types_validator
+from .errors import InitializationParamError
+from .log_manager import LogLevel
+from .utils import log, log_exception, signal_handler
+from .status import Status
+from .node import Node, Type, IntrepidType, DataElement
+from .qos import Qos
+from .message import IntrepidMessage, Opcode, InitRequest, ExecRequest, ExecResponse
 
-# from intrepid_python_sdk.simulator import Simulator
-# from intrepid_python_sdk.entity import Entity, WorldEntity
-# from intrepid_python_sdk.vehicle import Vehicle
-# from intrepid_python_sdk.sim_client import SimClient
+# from .simulator import Simulator
+# from .entity import Entity, WorldEntity
+# from .vehicle import Vehicle
+# from .sim_client import SimClient
 # from simulator.simulator import Simulator
 
 import aiohttp
@@ -46,6 +42,7 @@ from .protocol import (
     DiscoveryPinSpec,
     DiscoveryPinType,
     DiscoveryPinTypeKind,
+    DiscoveryTypeSpec,
     Empty,
     ExecReply,
     IncomingMessage,
@@ -83,6 +80,7 @@ class Intrepid:
         func: Callable
         spec: DiscoveryNodeSpec
         first_arg_is_context: bool
+        empty_output: bool
         tuple_output: bool
         input_types: list[Any]
         output_types: list[Any]
@@ -91,6 +89,8 @@ class Intrepid:
     init_timeout: float = 2
     exec_timeout: float = 2
     all_nodes: dict[str, Node] = {}
+    all_types: dict[str, type] = {}
+    type_names: dict[type, str] = {}
     debug_mode: bool = False
 
     __instance = None
@@ -108,6 +108,7 @@ class Intrepid:
 
         self.namespace = namespace
         self.qos = None
+        self.type_names = TYPE_MAP.copy() # copy built-in types
         # self.__unix_socket_path = None
         self.__node = None
         self.__node_info = None
@@ -116,7 +117,12 @@ class Intrepid:
         self.__app = None
         self.__runner = self.create_runner()
 
-    async def websocket_handler(self, request: Any):
+    def __add_namespace(self, path: str) -> str:
+        if self.namespace:
+            return f"{self.namespace}/{path}"
+        return path
+
+    async def __websocket_handler(self, request: Any):
         websocket = web.WebSocketResponse()
         await websocket.prepare(request)
 
@@ -143,6 +149,30 @@ class Intrepid:
             if len(command.data_outputs) != len(spec_data_outputs):
                 raise ValueError("expected %d data outputs, got %d" % (len(spec_data_outputs), len(command.data_outputs)))
 
+        def to_type_spec(type_name: str, ty: type) -> DiscoveryTypeSpec:
+            def type_to_str(ty: Any) -> str:
+                if get_origin(ty) is list:
+                    inner_ty = get_args(ty)[0]
+                    return f"list[{type_to_str(inner_ty)}]"
+                else:
+                    for ty2, name in self.type_names.items():
+                        if ty2 == ty:
+                            return name
+                    raise ValueError(f"type is not registered: {ty}")
+
+            if not issubclass(ty, BaseModel):
+                raise ValueError(f"type \"{type_name}\" is not a subclass of pydantic.BaseModel")
+
+            fields = []
+            for name, field in ty.model_fields.items():
+                fields.append((name, type_to_str(field.annotation)))
+
+            return DiscoveryTypeSpec(
+                type=type_name,
+                description=None,
+                fields=fields,
+            )
+
         async for message in websocket:
             data = message.data
             if self.debug_mode:
@@ -159,6 +189,7 @@ class Intrepid:
                                 init_timeout=self.init_timeout,
                                 exec_timeout=self.exec_timeout,
                             ),
+                            types=[to_type_spec(type_name, ty) for type_name, ty in self.all_types.items()],
                             nodes=[self.all_nodes[node].spec for node in self.all_nodes],
                         )
                     )
@@ -198,8 +229,8 @@ class Intrepid:
                             return deserialize_single_input(data, annotation)
 
                     inputs = []
-                    for i, type in enumerate(active_node.node.input_types):
-                        inputs.append(deserialize_any_input(command.exec.inputs[i], type))
+                    for i, ty in enumerate(active_node.node.input_types):
+                        inputs.append(deserialize_any_input(command.exec.inputs[i], ty))
 
                     if active_node.node.first_arg_is_context:
                         async def debug_log_callback(message: str) -> None:
@@ -221,7 +252,11 @@ class Intrepid:
                     else:
                         result = func(*inputs)
 
-                    if not active_node.node.tuple_output:
+                    if active_node.node.empty_output:
+                        result = []
+                    elif active_node.node.tuple_output:
+                        result = result # already a list
+                    else:
                         result = [result]
 
                     if context is not None:
@@ -307,7 +342,7 @@ class Intrepid:
     def create_runner(self):
         self.__app = web.Application()
         self.__app.add_routes([
-            web.get('/', self.websocket_handler),
+            web.get('/', self.__websocket_handler),
         ])
         return web.AppRunner(self.__app)
 
@@ -350,6 +385,14 @@ class Intrepid:
         """
         return Intrepid.__get_instance().configuration_manager.intrepid_config
 
+    def register_type(self, type: type, name: str | None = None):
+        if name is None:
+            name = type.__name__
+
+        full_name = self.__add_namespace(name)
+        self.type_names[type] = full_name
+        self.all_types[full_name] = type
+
     def register_node(
         self,
         func: Callable,
@@ -370,12 +413,12 @@ class Intrepid:
         def get_type_name(annotation: type) -> tuple[str, DiscoveryPinContainer]:
             if get_origin(annotation) is list:
                 inner_type = get_args(annotation)[0]
-                type_name = TYPE_MAP.get(inner_type)
+                type_name = self.type_names.get(inner_type)
                 type_container = DiscoveryPinContainer.ARRAY
                 if type_name is None:
                     raise ValueError(f"unsupported inner type in list: {inner_type}")
             else:
-                type_name = TYPE_MAP.get(annotation)
+                type_name = self.type_names.get(annotation)
                 type_container = DiscoveryPinContainer.SINGLE
                 if type_name is None:
                     raise ValueError(f"unsupported type: {annotation}")
@@ -388,7 +431,7 @@ class Intrepid:
             if node_name == "<lambda>":
                 raise ValueError("you must provide a name for lambda functions")
 
-            full_name = f"{self.namespace}/{node_name}" if self.namespace else node_name
+            full_name = self.__add_namespace(node_name)
             node_doc = description or func.__doc__ or None
 
             inputs: list[DiscoveryPinSpec] = []
@@ -406,6 +449,7 @@ class Intrepid:
             sig = inspect.signature(func, eval_str=True)
             first_arg_is_context = False
             tuple_output = False
+            empty_output = False
             input_types: list[Any] = []
             output_types: list[Any] = []
 
@@ -429,7 +473,9 @@ class Intrepid:
                 ))
                 input_types.append(param.annotation)
 
-            if sig.return_annotation is not inspect.Parameter.empty:
+            if sig.return_annotation is inspect.Parameter.empty:
+                empty_output = True
+            else:
                 if get_origin(sig.return_annotation) is tuple:
                     tuple_output = True
                     for i, inner_type in enumerate(get_args(sig.return_annotation)):
@@ -459,6 +505,7 @@ class Intrepid:
                     outputs=outputs,
                 ),
                 first_arg_is_context=first_arg_is_context,
+                empty_output=empty_output,
                 tuple_output=tuple_output,
                 input_types=input_types,
                 output_types=output_types,
@@ -736,4 +783,3 @@ class Intrepid:
                     return False
 
             return True
-

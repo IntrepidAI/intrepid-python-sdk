@@ -1,6 +1,6 @@
 from enum import Enum
-from typing import Optional, Self, Any
-from pydantic import BaseModel, model_validator, model_serializer, ModelWrapValidatorHandler
+from pydantic import BaseModel, ModelWrapValidatorHandler, model_serializer, model_validator
+from typing import Any, Optional, Self
 
 
 class Empty(BaseModel):
@@ -100,8 +100,14 @@ class DiscoveryNodeSpec(BaseModel):
     inputs: Optional[list[DiscoveryPinSpec]] = None
     outputs: Optional[list[DiscoveryPinSpec]] = None
 
+class DiscoveryTypeSpec(BaseModel):
+    type: str
+    description: Optional[str] = None
+    fields: list[tuple[str, str]]
+
 class Discovery(BaseModel):
     options: DiscoveryOptions
+    types: list[DiscoveryTypeSpec]
     nodes: list[DiscoveryNodeSpec]
 
 class IncomingMessage(BaseModel):

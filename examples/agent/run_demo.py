@@ -2,11 +2,16 @@ import asyncio
 from intrepid_python_sdk.agent.adapter import action, sensor
 from intrepid_python_sdk import Intrepid, Qos, Node, IntrepidType, Type
 from intrepid_python_sdk.intrepid_types import TYPE_MAP, Context, Vec3
+from pydantic import BaseModel
 
-
+class CustomType(BaseModel):
+    foo: str
+    bar: int
+    baz: Vec3
 
 if __name__ == "__main__":
     runtime = Intrepid(namespace="test")
+    # runtime.debug_mode = True
 
     def simple_node(a: int, b: int) -> int:
         """Example node that adds two numbers"""
@@ -19,6 +24,10 @@ if __name__ == "__main__":
     def node_with_array_type(a: list[int]) -> int:
         """Example node that calculates length of an array"""
         return len(a)
+
+    def node_with_custom_type(a: CustomType) -> CustomType:
+        """Example node that manipulates a custom type"""
+        return CustomType(foo="hello", bar=123, baz=Vec3(x=1.0, y=2.0, z=3.0))
 
     def node_with_multiple_outputs(a: int, b: int) -> tuple[int, int]:
         """Example node that returns two numbers"""
@@ -46,9 +55,11 @@ if __name__ == "__main__":
         ctx.state += 1
         return ctx.state
 
+    runtime.register_type(CustomType)
     runtime.register_node(simple_node)
     runtime.register_node(simple_node_with_defaults)
     runtime.register_node(node_with_array_type)
+    runtime.register_node(node_with_custom_type)
     runtime.register_node(node_with_multiple_outputs)
     runtime.register_node(node_with_complex_types, label="ComplexTypes", description="A node handling complex types")
     runtime.register_node(async_node)
