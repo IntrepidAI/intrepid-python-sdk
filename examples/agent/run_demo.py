@@ -40,17 +40,18 @@ if __name__ == "__main__":
 
     async def node_with_state(ctx: Context[int]) -> int:
         """Example node that increments a number on each call"""
+
         if ctx.state is None:
             ctx.state = 0
         ctx.state += 1
         return ctx.state
 
-    runtime.register(simple_node)
-    runtime.register(simple_node_with_defaults)
-    runtime.register(node_with_array_type)
-    runtime.register(node_with_multiple_outputs)
-    runtime.register(node_with_complex_types, label="ComplexTypes", description="A node handling complex types")
-    runtime.register(async_node)
-    runtime.register(node_with_feedback)
-    runtime.register(node_with_state)
+    runtime.register_node(simple_node)
+    runtime.register_node(simple_node_with_defaults)
+    runtime.register_node(node_with_array_type)
+    runtime.register_node(node_with_multiple_outputs)
+    runtime.register_node(node_with_complex_types, label="ComplexTypes", description="A node handling complex types")
+    runtime.register_node(async_node)
+    runtime.register_node(node_with_feedback)
+    runtime.register_node(node_with_state)
     runtime.start("0.0.0.0", 8765)

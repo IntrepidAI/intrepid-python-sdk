@@ -43,7 +43,7 @@ scipy==1.15.2
     # via Intrepid (pyproject.toml)
 tomli-w==1.1.0
     # via Intrepid (pyproject.toml)
-toml=0.10
+toml==0.10
 types-pyyaml==6.0.12.20240917
     # via responses
 urllib3==2.5.0

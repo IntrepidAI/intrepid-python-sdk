@@ -350,7 +350,7 @@ class Intrepid:
         """
         return Intrepid.__get_instance().configuration_manager.intrepid_config
 
-    def register(
+    def register_node(
         self,
         func: Callable,
         *,
