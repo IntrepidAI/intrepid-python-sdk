@@ -79,7 +79,7 @@ You can now connect Intrepid Agent to `0.0.0.0:8765`
 ## Start Intrepid Runtime Core
 
 Execute the Intrepid runtime (`intrepid-agent`) with arguments
-`run-node` <node_name>
+`--web` to expose the control dashboard to localhost
 `--load ws://<host>:<port>` where the service is running
 
 
@@ -92,27 +92,26 @@ This should show
 ```Bash
 
 
+  ╔══════════════════════════════════╗
+  ║                                  ║
+  ║ 🚀  Web service is running on:   ║
+  ║                                  ║
+  ║ 🔗  http://127.0.0.1:9180        ║
+  ║                                  ║
+  ╚══════════════════════════════════╝
 
 ```
 
-The node is running and computing the callback function, and returning `3.0`
-
-## Publish custom node
-
-In order to be viewed from the dashboard and connected to the rest of the graph, a node must be published.
-An authentication token is necessary to publish a node to a user library. Such token can be retrieved from dashboard at https://labs.intrepid.ai from the `Project` section on the left sidebar.
+Point the browser to `http://127.0.0.1:9180` and search for the exposed nodes (right click and search)
+At this point you can create the behavior you need, by importing and connecting the nodes you need.
+Click `Run` to execute such behavior.
 
 
-```Bash
-./intrepid-agent publish node/sdk/ex1 --load ws://127.0.0.1:9999 https://labs.intrepid.ai/projects/34/r3Gv...otpm
+## Publish node
 
-```
+Not yet implemented.
 
-If node is published correctly, this will be printed to stdout
+# Examples
 
-```Bash
-intrepid.ai/projects/34/Uy66ce2RCqqOniGLBuNGcaUu
-2024-10-08T15:15:28.790Z INFO  [exec_graph_connector::plugins] remote plugin initialized: ws://127.0.0.1:9999
-2024-10-08T15:15:28.795Z INFO  [exec_graph_connector::http] -> https://labs.intrepid.ai/api/nodes/sdk
-2024-10-08T15:15:28.833Z INFO  [exec_graph_connector::http] <- 201, length: 43
-```
+An exhaustive list of sample nodes is provided in `examples/agent/run_demo.py`.
+An example to call ROS2 utilities is provided in `examples/agent/ros2_demo.py`
