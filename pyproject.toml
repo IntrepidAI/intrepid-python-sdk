@@ -1,10 +1,19 @@
 [tool.poetry]
 name = "intrepid-python-sdk"
-version = "0.1.13"
+version = "0.1.14"
 description = "Intrepid Python SDK"
 authors = ["Intrepid AI <hello@intrepid.ai>"]
-license = "Apache License Version 2.0"
 readme = "README.md"
+license = "Apache-2.0"
+include = ["LICENSE"]
+
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12"
+]
+
+
 
 [tool.poetry.dependencies]
 python = ">=3.12"
@@ -24,8 +33,9 @@ Sources = "https://github.com/IntrepidAI/intrepid-python-sdk"
 Documentation = "https://docs.developers.intrepid.ai/docs/python"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
+
 
 [tool.pytest.ini_options]
 pythonpath = ["flagship", "tests"]

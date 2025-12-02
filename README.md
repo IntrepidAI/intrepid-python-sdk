@@ -1,5 +1,11 @@
+
 # Build and Install
 
+## Build from pip
+
+`pip install intrepid-python-sdk`
+
+## Build from sources
 
 Create a new conda environment with `conda create -n intrepid python=3.10`
 
@@ -17,20 +23,7 @@ Build Python Intrepid SDK
 poetry build
 poetry install
 ```
-And check that all has been installed correctly
 
-```
-python examples/ex0.py
-```
-
-This should print
-
-```
-Hello from Intrepid SDK
-```
-
-
-<!-- `python3 -m websockets ws://localhost:9999/` -->
 
 
 
@@ -72,7 +65,7 @@ if __name__ == "__main__":
 The code above can be saved to `my_node.py` and executed with `python my_node.py`
 
 ```Shell
-You can now connect Intrepid Agent to `0.0.0.0:8765`
+You can now connect Intrepid Agent to 0.0.0.0:8765
 ```
 
 
@@ -114,4 +107,5 @@ Not yet implemented.
 # Examples
 
 An exhaustive list of sample nodes is provided in `examples/agent/run_demo.py`.
+
 An example to call ROS2 utilities is provided in `examples/agent/ros2_demo.py`
