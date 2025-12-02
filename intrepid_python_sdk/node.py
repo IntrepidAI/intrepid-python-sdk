@@ -1,6 +1,7 @@
 from enum import Enum
 import json
 import toml
+from typing import Dict, List
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -187,12 +188,14 @@ class Node:
     }
     """
 
+    # TODO make private and rename type to name
+
     def __init__(self, type: str = ""):
-        self.inputs = []
-        self.outputs = []
-        self.type = type
-        self.description = ""
-        self.label = ""
+        self.inputs: List = []
+        self.outputs: List = []
+        self.type: str = type
+        self.description: str = ""
+        self.label: str = ""
 
     def add_label(self, label: str):
         self.label = label
@@ -246,6 +249,10 @@ class Node:
         return [(index, element.label, element.type) for index, element in enumerate(self.outputs)]
 
     def get_type(self) -> str:
+        return self.type
+
+    @property
+    def name(self) -> str:
         return self.type
 
     def to_json(self):

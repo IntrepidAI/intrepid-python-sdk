@@ -321,6 +321,28 @@ class SimClient:
         })
         return goal.data
 
+
+    async def draw_line(self, src: Position, dst: Position, color: str = "#FF0000"):
+        try:
+            await self.__client.rpc(f"gizmos.draw_line", {
+                "src": src.to_dict(),
+                "dst": dst.to_dict(),
+                "color": color,
+            })
+        except Exception as e:
+            logger.error(f"[draw_line] RPC call failed: {e}")
+
+    async def draw_sphere(self, origin: Position, radius: float, color: str = "#FF0000"):
+        try:
+            await self.__client.rpc(f"gizmos.draw_sphere", {
+                "position": origin.to_dict(),
+                "radius": radius,
+                "color": color,
+            })
+        except Exception as e:
+            logger.error(f"[draw_sphere] RPC call failed: {e}")
+
+
 class Entity:
     def __init__(self, client: SimClient, entity: str, group: str):
         assert client.is_connected() == True, "Client is not connected."
@@ -461,6 +483,7 @@ class AbstractSensor:
         rotation: bool = True,
         bbox: bool = True,
         bsphere: bool = True,
+        robot_id: bool = True,
     ) -> dict:
         result = await self._client.client().rpc("script.eval", {
             "code": f"""
@@ -480,6 +503,7 @@ class AbstractSensor:
                     {rotation and "local rotation = sim.object.rotation_angles(entity)" or ""}
                     {bbox and "local bbox = sim.object.compute_aabb(entity)" or ""}
                     {bsphere and "local bsphere = sim.object.compute_bounding_sphere(entity)" or ""}
+                    {robot_id and "local robot_id = sim.object.get_robot_id(entity)" or ""}
 
                     table.insert(result, {{
                         entity = entity,
@@ -488,6 +512,7 @@ class AbstractSensor:
                         {rotation and "rotation = rotation," or ""}
                         {bbox and "bbox = bbox," or ""}
                         {bsphere and "bsphere = bsphere," or ""}
+                        {robot_id and "robot_id = robot_id," or ""}
                     }})
                 end
 
@@ -504,6 +529,7 @@ class AbstractSensor:
             res[e.get("entity")]["bbox"] = e.get("bbox", None)
             res[e.get("entity")]["bsphere"] = e.get("bsphere", None)
             res[e.get("entity")]["group"] = e.get("group", None)
+            res[e.get("entity")]["robot_id"] = e.get("robot_id", None)
 
         return res
 

@@ -11,9 +11,6 @@ def signal_handler(sig, frame):
     print("Ctrl+C detected. Goodbye...")
     sys.exit(0)
 
-
-
-
 def log(tag, level, message, start_config=None):
     configuration = start_config if start_config is not None else intrepid_python_sdk.Intrepid.config()
     if configuration is not None:
@@ -22,13 +19,11 @@ def log(tag, level, message, start_config=None):
         if custom_log_manager is not None and (0 < level.value <= custom_log_level.value):
             custom_log_manager.log(tag, level, message)
 
-
 def log_exception(tag, exception, traceback):
     configuration = intrepid_python_sdk.Intrepid.config()
     configured_log_manager = configuration.log_manager if configuration is not None else None
     if configured_log_manager is not None:
         configured_log_manager.exception(tag, exception, traceback)
-
 
 def get_args_or_default(key, expected_type, default_value, kwargs):
     if key not in kwargs:

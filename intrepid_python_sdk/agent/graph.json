@@ -1,0 +1,15 @@
+{
+  "nodes": [
+    {"id":"pick_goal", "type":"PickNextWaypoint"},
+    {"id":"move", "type":"MoveTo", "params":{"goal":"$pick_goal.output"}},
+    {"id":"scan", "type":"DetectPerson", "params":{}},
+    {"id":"orbit", "type":"OrbitAround", "params":{"center":"$scan.person_pos","radius":5,"duration":12}}
+  ],
+  "transitions":[
+    {"from":"pick_goal","to":"move"},
+    {"from":"move","to":"scan","condition":"arrived"},
+    {"from":"scan","to":"orbit","condition":"person_found"},
+    {"from":"scan","to":"pick_goal","condition":"no_person"},
+    {"from":"orbit","to":"pick_goal","condition":"timeout"}
+  ]
+}
