@@ -25,7 +25,9 @@ class PersistentPublisher(Node):
         return True
 
 
-def publish_to_ros(ctx: Context[PersistentPublisher], topic_name: str, message: str) -> bool:
+def publish_to_ros(ctx: Context[PersistentPublisher],
+                   topic_name: str,
+                   message: str) -> bool:
     """ Publish message to ROS2 topic_name """
 
     if ctx.state is None:
