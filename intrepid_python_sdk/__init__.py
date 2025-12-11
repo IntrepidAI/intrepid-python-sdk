@@ -49,7 +49,7 @@ from .protocol import (
     InitCommand,
     OutgoingMessage,
 )
-from .intrepid_types import TYPE_MAP, Context
+from .intrepid_types import TYPE_MAP, Context, Emitter
 from . import constants
 from .constants import TAG_APP_NAME
 
@@ -79,6 +79,7 @@ class Intrepid:
     class Node(BaseModel):
         func: Callable
         spec: DiscoveryNodeSpec
+        node_is_emitter: bool
         first_arg_is_context: bool
         empty_output: bool
         tuple_output: bool
@@ -131,6 +132,7 @@ class Intrepid:
             state: Any
 
         active_nodes: dict[int, ActiveNode] = {}
+        active_tasks: list[asyncio.Task] = []
 
         def assert_spec_matches(spec: DiscoveryNodeSpec, command: InitCommand):
             spec_exec_inputs = [input for input in spec.inputs or [] if input.type.kind == DiscoveryPinTypeKind.FLOW]
@@ -179,9 +181,28 @@ class Intrepid:
                 logger.info(f"<-- {data}")
             command = IncomingMessage.model_validate_json(data)
 
+            async def send_reply(reply: OutgoingMessage) -> None:
+                data = reply.model_dump_json(exclude_none=True)
+                if self.debug_mode:
+                    logger.info(f"--> {data}")
+                await websocket.send_str(data)
+
+            def deserialize_any_input(data: Any, annotation: Any) -> Any:
+                def deserialize_single_input(data: Any, annotation: Any) -> Any:
+                    if issubclass(annotation, BaseModel):
+                        return annotation.model_validate(data)
+                    else:
+                        return data
+
+                if get_origin(annotation) is list:
+                    inner_type = get_args(annotation)[0]
+                    return [deserialize_single_input(data, inner_type) for data in data]
+                else:
+                    return deserialize_single_input(data, annotation)
+
             try:
                 if command.discovery:
-                    reply = OutgoingMessage(
+                    await send_reply(OutgoingMessage(
                         id=command.id,
                         node=command.node,
                         discovery_ok=Discovery(
@@ -192,65 +213,105 @@ class Intrepid:
                             types=[to_type_spec(type_name, ty) for type_name, ty in self.all_types.items()],
                             nodes=[self.all_nodes[node].spec for node in self.all_nodes],
                         )
-                    )
+                    ))
                 elif command.init:
                     node = self.all_nodes[command.init.node_type]
                     if node is None:
-                        reply = OutgoingMessage(
+                        await send_reply(OutgoingMessage(
                             id=command.id,
                             node=command.node,
                             error=f"node {command.init.node_type} not found",
-                        )
-                    else:
-                        assert_spec_matches(node.spec, command.init)
-                        active_nodes[command.node or 0] = ActiveNode(node=node, state=None)
-                        reply = OutgoingMessage(
+                        ))
+                        continue
+
+                    assert_spec_matches(node.spec, command.init)
+
+                    if node.node_is_emitter:
+                        await send_reply(OutgoingMessage(
                             id=command.id,
                             node=command.node,
                             init_ok=Empty(),
-                        )
+                        ))
+
+                        async def emit_callback(result: Any) -> None:
+                            if node.empty_output:
+                                result = []
+                            elif node.tuple_output:
+                                result = result # already a list
+                            else:
+                                result = [result]
+
+                            await send_reply(OutgoingMessage(
+                                id=0,
+                                node=command.node,
+                                exec_ok=ExecReply(
+                                    exec_id=0,
+                                    outputs=result,
+                                ),
+                            ))
+
+                        async def emit_error_callback(error: Exception) -> None:
+                            await send_reply(OutgoingMessage(
+                                id=0,
+                                node=command.node,
+                                error=str(error),
+                            ))
+
+                        func = node.func
+
+                        init_inputs: list[Any] = []
+                        for i, ty in enumerate(node.input_types):
+                            init_inputs.append(deserialize_any_input(command.init.data_inputs[i].data, ty))
+
+                        emit_context = Emitter(emit_callback, emit_error_callback)
+                        init_inputs = [emit_context] + init_inputs
+
+                        if inspect.iscoroutinefunction(func):
+                            task = asyncio.create_task(func(*init_inputs))
+                            active_tasks.append(task)
+                        else:
+                            func(*init_inputs)
+                    else:
+                        active_nodes[command.node or 0] = ActiveNode(node=node, state=None)
+                        await send_reply(OutgoingMessage(
+                            id=command.id,
+                            node=command.node,
+                            init_ok=Empty(),
+                        ))
+
                 elif command.exec:
                     active_node = active_nodes[command.node or 0]
+                    if active_node is None:
+                        await send_reply(OutgoingMessage(
+                            id=command.id,
+                            node=command.node,
+                            error=f"node {command.node} cannot be executed",
+                        ))
+                        continue
+
                     state = active_node.state
                     func = active_node.node.func
                     context = None
 
-                    def deserialize_single_input(data: Any, annotation: Any) -> Any:
-                        if issubclass(annotation, BaseModel):
-                            return annotation.model_validate(data)
-                        else:
-                            return data
-
-                    def deserialize_any_input(data: Any, annotation: Any) -> Any:
-                        if get_origin(annotation) is list:
-                            inner_type = get_args(annotation)[0]
-                            return [deserialize_single_input(data, inner_type) for data in data]
-                        else:
-                            return deserialize_single_input(data, annotation)
-
-                    inputs = []
+                    exec_inputs: list[Any] = []
                     for i, ty in enumerate(active_node.node.input_types):
-                        inputs.append(deserialize_any_input(command.exec.inputs[i], ty))
+                        exec_inputs.append(deserialize_any_input(command.exec.inputs[i], ty))
 
                     if active_node.node.first_arg_is_context:
                         async def debug_log_callback(message: str) -> None:
-                            debug_reply = OutgoingMessage(
+                            await send_reply(OutgoingMessage(
                                 id=0,
                                 node=command.node,
                                 debug_message=message,
-                            )
-                            data = debug_reply.model_dump_json(exclude_none=True)
-                            if self.debug_mode:
-                                logger.info(f"--> {data}")
-                            await websocket.send_str(data)
+                            ))
 
                         context = Context(state, debug_log_callback)
-                        inputs = [context] + inputs
+                        exec_inputs = [context] + exec_inputs
 
                     if inspect.iscoroutinefunction(func):
-                        result = await func(*inputs)
+                        result = await func(*exec_inputs)
                     else:
-                        result = func(*inputs)
+                        result = func(*exec_inputs)
 
                     if active_node.node.empty_output:
                         result = []
@@ -262,36 +323,32 @@ class Intrepid:
                     if context is not None:
                         active_nodes[command.node or 0].state = context.state
 
-                    reply = OutgoingMessage(
+                    await send_reply(OutgoingMessage(
                         id=command.id,
                         node=command.node,
                         exec_ok=ExecReply(
                             exec_id=command.exec.exec_id,
                             outputs=result,
                         ),
-                    )
+                    ))
                 else:
-                    reply = OutgoingMessage(
+                    await send_reply(OutgoingMessage(
                         id=command.id,
                         node=command.node,
                         error= constants.ERROR_UNSUPPORTED_COMMAND,
-                    )
-
-                data = reply.model_dump_json(exclude_none=True)
+                    ))
 
             except Exception as e:
-                reply = OutgoingMessage(
+                import traceback
+                traceback.print_exc()
+                await send_reply(OutgoingMessage(
                     id=command.id,
                     node=command.node,
                     error=str(e),
-                )
-                import traceback
-                traceback.print_exc()
-                data = reply.model_dump_json(exclude_none=True)
+                ))
 
-            if self.debug_mode:
-                logger.info(f"--> {data}")
-            await websocket.send_str(data)
+        for task in active_tasks:
+            task.cancel()
 
         return websocket
 
@@ -347,7 +404,8 @@ class Intrepid:
         return web.AppRunner(self.__app)
 
     async def start_server(self, host, port):
-        logger.info("\nYou can now connect Intrepid Agent to host {}:{}".format(host, port))
+        hostport = f"ws://{host}:{port}"
+        logger.info(f"\nYou can now connect Intrepid Agent to {hostport}, run:\n$ intrepid-agent --web --load {hostport}")
         await self.__runner.setup()
         site = web.TCPSite(self.__runner, host, port)
         await site.start()
@@ -436,15 +494,8 @@ class Intrepid:
 
             inputs: list[DiscoveryPinSpec] = []
             outputs: list[DiscoveryPinSpec] = []
-
-            inputs.append(DiscoveryPinSpec(
-                label="",
-                type=DiscoveryPinType(kind=DiscoveryPinTypeKind.FLOW),
-            ))
-            outputs.append(DiscoveryPinSpec(
-                label="",
-                type=DiscoveryPinType(kind=DiscoveryPinTypeKind.FLOW),
-            ))
+            node_is_emitter = False
+            emitter_type: type | None = None
 
             sig = inspect.signature(func, eval_str=True)
             first_arg_is_context = False
@@ -454,9 +505,20 @@ class Intrepid:
             output_types: list[Any] = []
 
             for i, param in enumerate(sig.parameters.values()):
+                if param.annotation is Emitter or get_origin(param.annotation) is Emitter:
+                    if i != 0:
+                        raise ValueError(f"Emitter must be the first parameter")
+
+                    node_is_emitter = True
+                    if param.annotation is Emitter:
+                        emitter_type = None
+                    else:
+                        emitter_type = get_args(param.annotation)[0]
+                    continue
+
                 if param.annotation is Context or get_origin(param.annotation) is Context:
                     if i != 0:
-                        raise ValueError(f"context must be the first parameter")
+                        raise ValueError(f"Context must be the first parameter")
 
                     first_arg_is_context = True
                     continue
@@ -473,12 +535,10 @@ class Intrepid:
                 ))
                 input_types.append(param.annotation)
 
-            if sig.return_annotation is inspect.Parameter.empty:
-                empty_output = True
-            else:
-                if get_origin(sig.return_annotation) is tuple:
+            if node_is_emitter:
+                if get_origin(emitter_type) is tuple:
                     tuple_output = True
-                    for i, inner_type in enumerate(get_args(sig.return_annotation)):
+                    for i, inner_type in enumerate(get_args(emitter_type)):
                         type_name, type_container = get_type_name(inner_type)
                         outputs.append(DiscoveryPinSpec(
                             label=f"out{i+1}",
@@ -486,14 +546,52 @@ class Intrepid:
                             container=type_container,
                         ))
                         output_types.append(inner_type)
-                else:
-                    type_name, type_container = get_type_name(sig.return_annotation)
+                elif emitter_type is not None:
+                    type_name, type_container = get_type_name(emitter_type)
                     outputs.append(DiscoveryPinSpec(
                         label="out",
                         type=DiscoveryPinType(kind=DiscoveryPinTypeKind.DATA, data_type=type_name),
                         container=type_container,
                     ))
-                    output_types.append(sig.return_annotation)
+                    output_types.append(emitter_type)
+                else:
+                    empty_output = True
+
+                if sig.return_annotation is not inspect.Parameter.empty:
+                    raise ValueError("emitter nodes cannot have a return value")
+            else:
+                if sig.return_annotation is inspect.Parameter.empty:
+                    empty_output = True
+                else:
+                    if get_origin(sig.return_annotation) is tuple:
+                        tuple_output = True
+                        for i, inner_type in enumerate(get_args(sig.return_annotation)):
+                            type_name, type_container = get_type_name(inner_type)
+                            outputs.append(DiscoveryPinSpec(
+                                label=f"out{i+1}",
+                                type=DiscoveryPinType(kind=DiscoveryPinTypeKind.DATA, data_type=type_name),
+                                container=type_container,
+                            ))
+                            output_types.append(inner_type)
+                    else:
+                        type_name, type_container = get_type_name(sig.return_annotation)
+                        outputs.append(DiscoveryPinSpec(
+                            label="out",
+                            type=DiscoveryPinType(kind=DiscoveryPinTypeKind.DATA, data_type=type_name),
+                            container=type_container,
+                        ))
+                        output_types.append(sig.return_annotation)
+
+            if not node_is_emitter:
+                inputs.insert(0, DiscoveryPinSpec(
+                    label="",
+                    type=DiscoveryPinType(kind=DiscoveryPinTypeKind.FLOW),
+                ))
+
+            outputs.insert(0, DiscoveryPinSpec(
+                label="",
+                type=DiscoveryPinType(kind=DiscoveryPinTypeKind.FLOW),
+            ))
 
             self.all_nodes[full_name] = Intrepid.Node(
                 func=func,
@@ -504,6 +602,7 @@ class Intrepid:
                     inputs=inputs,
                     outputs=outputs,
                 ),
+                node_is_emitter=node_is_emitter,
                 first_arg_is_context=first_arg_is_context,
                 empty_output=empty_output,
                 tuple_output=tuple_output,

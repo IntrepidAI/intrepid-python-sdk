@@ -1,7 +1,7 @@
 import asyncio
 from intrepid_python_sdk.agent.adapter import action, sensor
 from intrepid_python_sdk import Intrepid, Qos, Node, IntrepidType, Type
-from intrepid_python_sdk.intrepid_types import TYPE_MAP, Context, Vec3
+from intrepid_python_sdk.intrepid_types import TYPE_MAP, Emitter, Context, Vec3
 from pydantic import BaseModel
 
 class CustomType(BaseModel):
@@ -49,11 +49,19 @@ if __name__ == "__main__":
 
     async def node_with_state(ctx: Context[int]) -> int:
         """Example node that increments a number on each call"""
-
         if ctx.state is None:
             ctx.state = 0
         ctx.state += 1
         return ctx.state
+
+    async def emitter_node(ctx: Emitter[int], interval: float):
+        """Example node that emits a number at a given interval"""
+        counter = 0
+        while True:
+            await asyncio.sleep(interval)
+            await ctx.send(counter)
+            # await ctx.send_error(Exception("Test error"))
+            counter += 1
 
     runtime.register_type(CustomType)
     runtime.register_node(simple_node)
@@ -65,4 +73,5 @@ if __name__ == "__main__":
     runtime.register_node(async_node)
     runtime.register_node(node_with_feedback)
     runtime.register_node(node_with_state)
+    runtime.register_node(emitter_node)
     runtime.start("0.0.0.0", 8766)

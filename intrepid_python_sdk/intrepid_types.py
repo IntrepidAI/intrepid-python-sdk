@@ -14,6 +14,20 @@ class Context(Generic[T]):
     async def debug_log(self, message: str) -> None:
         await self.debug_log_callback(message)
 
+class Emitter(Generic[T]):
+    emit_callback: Callable[[T], Awaitable[None]]
+    emit_error_callback: Callable[[Exception], Awaitable[None]]
+
+    def __init__(self, emit_callback: Callable[[T], Awaitable[None]], emit_error_callback: Callable[[Exception], Awaitable[None]]):
+        self.emit_callback = emit_callback
+        self.emit_error_callback = emit_error_callback
+
+    async def send(self, value: T) -> None:
+        await self.emit_callback(value)
+
+    async def send_error(self, error: Exception) -> None:
+        await self.emit_error_callback(error)
+
 # Intrepid primitive types
 Boolean = NewType("Boolean", bool)
 F32 = NewType("F32", float)
